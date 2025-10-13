@@ -5,7 +5,10 @@ This module contains serializers for goals, goal updates, and goal categories.
 """
 
 from rest_framework import serializers
-from .models import Goal, GoalCategory, GoalUpdate
+from .models import (
+    Goal, GoalCategory, GoalUpdate, GoalTemplate,
+    GoalVersion, BusinessObjective, GoalAlignment
+)
 from apps.accounts.serializers import UserListSerializer
 
 
@@ -101,5 +104,69 @@ class GoalCategorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'color',
             'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class GoalTemplateSerializer(serializers.ModelSerializer):
+    """Serializer for GoalTemplate model."""
+    
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    
+    class Meta:
+        model = GoalTemplate
+        fields = [
+            'id', 'name', 'description', 'goal_type',
+            'specific_template', 'measurable_template', 'achievable_template',
+            'relevant_template', 'time_bound_template', 'guidance', 'example',
+            'category', 'category_name', 'is_active', 'usage_count',
+            'created_by', 'created_by_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'usage_count', 'created_at', 'updated_at']
+
+
+class GoalVersionSerializer(serializers.ModelSerializer):
+    """Serializer for GoalVersion model."""
+    
+    changed_by_name = serializers.CharField(source='changed_by.full_name', read_only=True)
+    
+    class Meta:
+        model = GoalVersion
+        fields = [
+            'id', 'goal', 'version_number', 'changed_by', 'changed_by_name',
+            'change_type', 'data_snapshot', 'change_summary', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class BusinessObjectiveSerializer(serializers.ModelSerializer):
+    """Serializer for BusinessObjective model."""
+    
+    owner_name = serializers.CharField(source='owner.full_name', read_only=True)
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    aligned_goals_count = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = BusinessObjective
+        fields = [
+            'id', 'name', 'description', 'department', 'department_name',
+            'priority', 'target_date', 'owner', 'owner_name', 'status',
+            'is_active', 'aligned_goals_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'aligned_goals_count', 'created_at', 'updated_at']
+
+
+class GoalAlignmentSerializer(serializers.ModelSerializer):
+    """Serializer for GoalAlignment model."""
+    
+    goal_title = serializers.CharField(source='goal.title', read_only=True)
+    objective_name = serializers.CharField(source='objective.name', read_only=True)
+    
+    class Meta:
+        model = GoalAlignment
+        fields = [
+            'id', 'goal', 'goal_title', 'objective', 'objective_name',
+            'alignment_strength', 'justification', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
