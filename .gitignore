@@ -86,3 +86,4 @@ cypress/screenshots/
 # Temporary files
 *.tmp
 *.temp
+.vite
