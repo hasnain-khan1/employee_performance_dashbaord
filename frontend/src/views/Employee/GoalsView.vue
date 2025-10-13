@@ -146,7 +146,7 @@
     >
       <v-card elevation="8" class="goal-dialog-card">
         <v-card-title class="text-h5 bg-primary pa-4">
-          {{ editingGoal ? 'Edit Goal' : 'Create New Goal' }}
+          {{ viewingGoal ? 'View Goal' : (editingGoal ? 'Edit Goal' : 'Create New Goal') }}
         </v-card-title>
 
         <v-card-text class="pa-6">
@@ -157,6 +157,7 @@
                   v-model="goalForm.title"
                   label="Goal Title"
                   :rules="[v => !!v || 'Title is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -168,6 +169,7 @@
                   v-model="goalForm.description"
                   label="Description"
                   :rules="[v => !!v || 'Description is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -179,6 +181,7 @@
                   v-model="goalForm.goal_type"
                   :items="goalTypeOptions"
                   label="Goal Type"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -187,6 +190,7 @@
                   v-model="goalForm.priority"
                   :items="priorityOptions"
                   label="Priority"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -198,6 +202,7 @@
                   v-model="goalForm.metric"
                   label="Metric"
                   :rules="[v => !!v || 'Metric is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -206,6 +211,7 @@
                   v-model="goalForm.target_value"
                   label="Target Value"
                   type="number"
+                  :readonly="viewingGoal"
                 />
               </v-col>
             </v-row>
@@ -217,6 +223,7 @@
                   label="Start Date"
                   type="date"
                   :rules="[v => !!v || 'Start date is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -226,6 +233,7 @@
                   label="Target Date"
                   type="date"
                   :rules="[v => !!v || 'Target date is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -240,6 +248,7 @@
                   min="1"
                   max="100"
                   :rules="[v => !!v || 'Weight is required', v => v >= 1 && v <= 100 || 'Weight must be between 1 and 100']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -255,6 +264,7 @@
                   v-model="goalForm.specific"
                   label="Specific - What exactly will be accomplished?"
                   :rules="[v => !!v || 'Specific criteria is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -266,6 +276,7 @@
                   v-model="goalForm.measurable"
                   label="Measurable - How will success be measured?"
                   :rules="[v => !!v || 'Measurable criteria is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -277,6 +288,7 @@
                   v-model="goalForm.achievable"
                   label="Achievable - Is this goal realistic and attainable?"
                   :rules="[v => !!v || 'Achievable criteria is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -288,6 +300,7 @@
                   v-model="goalForm.relevant"
                   label="Relevant - How does this align with broader objectives?"
                   :rules="[v => !!v || 'Relevant criteria is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -299,6 +312,7 @@
                   v-model="goalForm.time_bound"
                   label="Time-bound - What is the deadline and timeline?"
                   :rules="[v => !!v || 'Time-bound criteria is required']"
+                  :readonly="viewingGoal"
                   required
                 />
               </v-col>
@@ -315,10 +329,10 @@
             variant="outlined"
             @click="closeGoalDialog"
           >
-            Cancel
+            {{ viewingGoal ? 'Close' : 'Cancel' }}
           </v-btn>
           <v-btn
-            v-if="!editingGoal"
+            v-if="!editingGoal && !viewingGoal"
             color="secondary"
             variant="outlined"
             :disabled="!formValid"
@@ -328,6 +342,7 @@
             Save as Draft
           </v-btn>
           <v-btn
+            v-if="!viewingGoal"
             color="primary"
             variant="elevated"
             :disabled="!formValid"
@@ -356,6 +371,7 @@ const loading = ref(false)
 const saving = ref(false)
 const goalDialog = ref(false)
 const editingGoal = ref(null)
+const viewingGoal = ref(false)
 const formValid = ref(false)
 const goalFormRef = ref(null) // Template ref for v-form
 
@@ -460,13 +476,47 @@ const openCreateDialog = () => {
 
 const editGoal = (goal) => {
   editingGoal.value = goal
-  goalForm.value = { ...goal }
+  // Properly map all fields from the goal
+  goalForm.value = {
+    title: goal.title || '',
+    description: goal.description || '',
+    goal_type: goal.goal_type || 'performance',
+    priority: goal.priority || 'medium',
+    metric: goal.metric || '',
+    target_value: goal.target_value || null,
+    start_date: goal.start_date || '',
+    target_date: goal.target_date || '',
+    weight: goal.weight || 10,
+    specific: goal.specific || '',
+    measurable: goal.measurable || '',
+    achievable: goal.achievable || '',
+    relevant: goal.relevant || '',
+    time_bound: goal.time_bound || ''
+  }
   goalDialog.value = true
 }
 
 const closeGoalDialog = () => {
   goalDialog.value = false
   editingGoal.value = null
+  viewingGoal.value = false
+  // Reset form to default values
+  goalForm.value = {
+    title: '',
+    description: '',
+    goal_type: 'performance',
+    priority: 'medium',
+    metric: '',
+    target_value: null,
+    start_date: '',
+    target_date: '',
+    weight: 10,
+    specific: '',
+    measurable: '',
+    achievable: '',
+    relevant: '',
+    time_bound: ''
+  }
 }
 
 const saveGoalAsDraft = async () => {
@@ -585,8 +635,26 @@ const saveGoal = async () => {
 }
 
 const viewGoal = (goal) => {
-  // Navigate to goal detail view
-  console.log('View goal:', goal)
+  viewingGoal.value = true
+  editingGoal.value = goal
+  // Populate form with goal data for viewing
+  goalForm.value = {
+    title: goal.title || '',
+    description: goal.description || '',
+    goal_type: goal.goal_type || 'performance',
+    priority: goal.priority || 'medium',
+    metric: goal.metric || '',
+    target_value: goal.target_value || null,
+    start_date: goal.start_date || '',
+    target_date: goal.target_date || '',
+    weight: goal.weight || 10,
+    specific: goal.specific || '',
+    measurable: goal.measurable || '',
+    achievable: goal.achievable || '',
+    relevant: goal.relevant || '',
+    time_bound: goal.time_bound || ''
+  }
+  goalDialog.value = true
 }
 
 const deleteGoal = async (goal) => {

@@ -7,7 +7,7 @@
       dark
       elevation="2"
     >
-      <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
+      <v-app-bar-nav-icon @click="drawer = !drawer" class="menu-icon-black"></v-app-bar-nav-icon>
       
       <v-toolbar-title>
         <router-link to="/" class="text-decoration-none text-white">
@@ -232,5 +232,9 @@ onMounted(async () => {
 
 .v-list-item--active {
   background-color: rgba(25, 118, 210, 0.08);
+}
+
+.menu-icon-black :deep(.v-icon) {
+  color: black !important;
 }
 </style>
