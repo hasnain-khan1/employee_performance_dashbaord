@@ -176,9 +176,15 @@ class ReviewCycle(models.Model):
         """Validate the review cycle data."""
         super().clean()
         
-        # Validate date order
+        # BR-004: Validate cycle name length (5-100 characters)
+        if len(self.name) < 5 or len(self.name) > 100:
+            raise ValidationError('Cycle name must be between 5 and 100 characters.')
+        
+        # BR-004: Validate date order - Start date must be before end date
         if self.start_date >= self.end_date:
-            raise ValidationError('Start date must be before end date.')
+            raise ValidationError({
+                'end_date': 'End date must be after start date. Please choose a later date.'
+            })
         
         if self.goal_setting_start >= self.goal_setting_end:
             raise ValidationError('Goal setting start date must be before end date.')
@@ -189,7 +195,21 @@ class ReviewCycle(models.Model):
         if self.manager_review_start >= self.manager_review_end:
             raise ValidationError('Manager review start date must be before end date.')
         
-        # Validate date sequence
+        # BR-007: All milestone dates must be within cycle start/end dates
+        if self.goal_setting_start < self.start_date:
+            raise ValidationError('Goal setting start must be within cycle dates.')
+        if self.goal_setting_end > self.end_date:
+            raise ValidationError('Goal setting end must be within cycle dates.')
+        if self.self_review_start < self.start_date:
+            raise ValidationError('Self review start must be within cycle dates.')
+        if self.self_review_end > self.end_date:
+            raise ValidationError('Self review end must be within cycle dates.')
+        if self.manager_review_start < self.start_date:
+            raise ValidationError('Manager review start must be within cycle dates.')
+        if self.manager_review_end > self.end_date:
+            raise ValidationError('Manager review end must be within cycle dates.')
+        
+        # BR-007: Validate logical date sequence
         if self.goal_setting_end > self.self_review_start:
             raise ValidationError('Goal setting period must end before self-review starts.')
         
@@ -210,6 +230,21 @@ class ReviewCycle(models.Model):
         total_weight = self.goal_weight_percentage + self.competency_weight_percentage
         if total_weight != 100:
             raise ValidationError('Goal and competency weights must sum to 100%.')
+        
+        # BR-004: Single active cycle enforcement - no overlapping review periods
+        if self.status == 'active':
+            overlapping_cycles = ReviewCycle.objects.filter(
+                status='active',
+                start_date__lte=self.end_date,
+                end_date__gte=self.start_date
+            ).exclude(pk=self.pk)
+            
+            if overlapping_cycles.exists():
+                raise ValidationError({
+                    'status': 'Cannot activate cycle. Only one active cycle is allowed at a time. '
+                              f'Active cycle: "{overlapping_cycles.first().name}" '
+                              f'({overlapping_cycles.first().start_date} to {overlapping_cycles.first().end_date})'
+                })
     
     @property
     def duration_days(self):
@@ -272,6 +307,35 @@ class ReviewCycle(models.Model):
         ).count()
         
         return (completed / participants.count()) * 100
+    
+    def activate(self):
+        """
+        Activate the cycle and lock the rating scale (BR-005).
+        This enforces the business rule that rating scales cannot be
+        modified once a cycle becomes active.
+        """
+        # Check if there's an active cycle (BR-004)
+        active_cycles = ReviewCycle.objects.filter(
+            status='active',
+            start_date__lte=self.end_date,
+            end_date__gte=self.start_date
+        ).exclude(pk=self.pk)
+        
+        if active_cycles.exists():
+            raise ValidationError(
+                f'Cannot activate cycle. Only one active cycle is allowed at a time. '
+                f'Active cycle: "{active_cycles.first().name}" '
+                f'({active_cycles.first().start_date} to {active_cycles.first().end_date})'
+            )
+        
+        self.status = 'active'
+        self.save()
+        
+        # BR-005: Lock the rating scale
+        if hasattr(self, 'rating_scale_config'):
+            self.rating_scale_config.lock()
+        
+        return self
 
 
 class CycleParticipant(models.Model):
@@ -422,9 +486,249 @@ class CycleParticipant(models.Model):
         return (completed_steps / total_steps) * 100
 
 
+class RatingScale(models.Model):
+    """
+    Rating scale model for performance reviews.
+    
+    Represents predefined rating scales that can be used
+    for evaluating performance during review cycles.
+    BR-005: Rating scale locked at cycle activation
+    """
+    
+    SCALE_TYPE_CHOICES = [
+        ('numeric', 'Numeric (e.g., 1-5)'),
+        ('descriptive', 'Descriptive (e.g., Exceeds/Meets/Below)'),
+        ('percentage', 'Percentage (0-100%)'),
+    ]
+    
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text='Rating scale name'
+    )
+    
+    description = models.TextField(
+        help_text='Description of the rating scale'
+    )
+    
+    scale_type = models.CharField(
+        max_length=20,
+        choices=SCALE_TYPE_CHOICES,
+        default='numeric',
+        help_text='Type of rating scale'
+    )
+    
+    min_value = models.IntegerField(
+        default=1,
+        help_text='Minimum rating value'
+    )
+    
+    max_value = models.IntegerField(
+        default=5,
+        help_text='Maximum rating value'
+    )
+    
+    # JSON structure: {value: {label: str, description: str, color: str}}
+    # Example: {1: {label: "Below Expectations", description: "Performance needs improvement", color: "#ff0000"}}
+    scale_points = models.JSONField(
+        help_text='Scale points with labels and descriptions'
+    )
+    
+    # Guidance for using this scale
+    usage_guidance = models.TextField(
+        blank=True,
+        help_text='Guidance text for managers using this scale'
+    )
+    
+    # Rating distribution guidelines for calibration
+    distribution_guidelines = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Expected distribution of ratings (e.g., {5: 10%, 4: 20%, 3: 40%, 2: 20%, 1: 10%})'
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Whether this scale is available for selection'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        """Meta options for RatingScale model."""
+        verbose_name = 'Rating Scale'
+        verbose_name_plural = 'Rating Scales'
+        ordering = ['name']
+    
+    def __str__(self):
+        """String representation of the rating scale."""
+        return f"{self.name} ({self.min_value}-{self.max_value})"
+
+
+class Competency(models.Model):
+    """
+    Competency model for performance evaluation.
+    
+    Represents skills, behaviors, and capabilities that can
+    be evaluated during performance reviews.
+    """
+    
+    CATEGORY_CHOICES = [
+        ('leadership', 'Leadership'),
+        ('technical', 'Technical'),
+        ('communication', 'Communication'),
+        ('teamwork', 'Teamwork'),
+        ('problem_solving', 'Problem Solving'),
+        ('innovation', 'Innovation'),
+        ('customer_focus', 'Customer Focus'),
+        ('other', 'Other'),
+    ]
+    
+    name = models.CharField(
+        max_length=200,
+        help_text='Competency name'
+    )
+    
+    description = models.TextField(
+        help_text='Detailed description of the competency'
+    )
+    
+    category = models.CharField(
+        max_length=50,
+        choices=CATEGORY_CHOICES,
+        help_text='Competency category'
+    )
+    
+    # JSON structure: [{level: str, description: str, examples: [str]}]
+    # Example: [{level: "Basic", description: "Can perform under supervision", examples: ["..."]}]
+    proficiency_levels = models.JSONField(
+        help_text='Proficiency levels and descriptions'
+    )
+    
+    # Behavioral indicators for each level
+    behavioral_indicators = models.JSONField(
+        help_text='Observable behaviors for each proficiency level'
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Whether this competency is active'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        """Meta options for Competency model."""
+        verbose_name = 'Competency'
+        verbose_name_plural = 'Competencies'
+        ordering = ['category', 'name']
+    
+    def __str__(self):
+        """String representation of the competency."""
+        return f"{self.name} ({self.get_category_display()})"
+
+
+class CycleRatingScale(models.Model):
+    """
+    Links a rating scale to a review cycle.
+    BR-005: Rating scale locked once cycle becomes active.
+    """
+    
+    cycle = models.OneToOneField(
+        ReviewCycle,
+        on_delete=models.CASCADE,
+        related_name='rating_scale_config',
+        help_text='Review cycle'
+    )
+    
+    rating_scale = models.ForeignKey(
+        RatingScale,
+        on_delete=models.PROTECT,
+        related_name='cycles',
+        help_text='Selected rating scale'
+    )
+    
+    is_locked = models.BooleanField(
+        default=False,
+        help_text='Whether the rating scale is locked (set when cycle becomes active)'
+    )
+    
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the rating scale was locked'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        """Meta options for CycleRatingScale model."""
+        verbose_name = 'Cycle Rating Scale'
+        verbose_name_plural = 'Cycle Rating Scales'
+    
+    def __str__(self):
+        """String representation."""
+        return f"{self.cycle.name} - {self.rating_scale.name}"
+    
+    def lock(self):
+        """Lock the rating scale (BR-005)."""
+        from django.utils import timezone
+        self.is_locked = True
+        self.locked_at = timezone.now()
+        self.save()
+
+
+class CycleCompetency(models.Model):
+    """
+    Links competencies to a review cycle with weighting.
+    Allows configurable competency frameworks per cycle.
+    """
+    
+    cycle = models.ForeignKey(
+        ReviewCycle,
+        on_delete=models.CASCADE,
+        related_name='competencies',
+        help_text='Review cycle'
+    )
+    
+    competency = models.ForeignKey(
+        Competency,
+        on_delete=models.CASCADE,
+        related_name='cycle_assignments',
+        help_text='Competency being evaluated'
+    )
+    
+    weight = models.PositiveIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        help_text='Weight of this competency in overall evaluation (1-100)'
+    )
+    
+    is_required = models.BooleanField(
+        default=True,
+        help_text='Whether evaluation of this competency is required'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        """Meta options for CycleCompetency model."""
+        verbose_name = 'Cycle Competency'
+        verbose_name_plural = 'Cycle Competencies'
+        unique_together = ['cycle', 'competency']
+        ordering = ['-weight', 'competency__name']
+    
+    def __str__(self):
+        """String representation."""
+        return f"{self.cycle.name} - {self.competency.name} ({self.weight}%)"
+
+
 class CycleTemplate(models.Model):
     """
-    Cycle template model.
+    Cycle template model for recurring reviews.
+    BR-006: Cycle templates for efficient setup of recurring reviews
     
     Represents a template for creating review cycles
     with predefined settings and configurations.
@@ -483,6 +787,23 @@ class CycleTemplate(models.Model):
     goal_weight_percentage = models.PositiveIntegerField(default=70)
     competency_weight_percentage = models.PositiveIntegerField(default=30)
     
+    # Template configuration
+    default_rating_scale = models.ForeignKey(
+        RatingScale,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='template_defaults',
+        help_text='Default rating scale for cycles created from this template'
+    )
+    
+    template_competencies = models.ManyToManyField(
+        Competency,
+        through='TemplateCompetency',
+        related_name='templates',
+        help_text='Default competencies for this template'
+    )
+    
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -498,7 +819,7 @@ class CycleTemplate(models.Model):
         return self.name
     
     def create_cycle(self, name, start_date, created_by):
-        """Create a new cycle from this template."""
+        """Create a new cycle from this template (BR-006)."""
         end_date = start_date + timedelta(days=self.default_duration_days)
         
         cycle = ReviewCycle.objects.create(
@@ -524,4 +845,53 @@ class CycleTemplate(models.Model):
             created_by=created_by
         )
         
+        # Set default rating scale if specified
+        if self.default_rating_scale:
+            CycleRatingScale.objects.create(
+                cycle=cycle,
+                rating_scale=self.default_rating_scale
+            )
+        
+        # Copy template competencies to cycle
+        for template_comp in self.template_competencies.through.objects.filter(template=self):
+            CycleCompetency.objects.create(
+                cycle=cycle,
+                competency=template_comp.competency,
+                weight=template_comp.weight
+            )
+        
         return cycle
+
+
+class TemplateCompetency(models.Model):
+    """
+    Through model for template competencies with default weights.
+    """
+    
+    template = models.ForeignKey(
+        CycleTemplate,
+        on_delete=models.CASCADE,
+        help_text='Cycle template'
+    )
+    
+    competency = models.ForeignKey(
+        Competency,
+        on_delete=models.CASCADE,
+        help_text='Competency'
+    )
+    
+    weight = models.PositiveIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        default=10,
+        help_text='Default weight for this competency'
+    )
+    
+    class Meta:
+        """Meta options."""
+        unique_together = ['template', 'competency']
+        verbose_name = 'Template Competency'
+        verbose_name_plural = 'Template Competencies'
+    
+    def __str__(self):
+        """String representation."""
+        return f"{self.template.name} - {self.competency.name}"
