@@ -1,0 +1,44 @@
+{
+  "name": "epms-frontend",
+  "version": "1.0.0",
+  "description": "Employee Performance Management System - Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "e2e": "cypress open",
+    "e2e:run": "cypress run",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "pinia": "^2.1.7",
+    "axios": "^1.6.2",
+    "vuetify": "^3.4.8",
+    "@mdi/font": "^7.3.67",
+    "chart.js": "^4.4.0",
+    "vue-chartjs": "^5.3.0",
+    "date-fns": "^2.30.0",
+    "lodash-es": "^4.17.21",
+    "vue-toastification": "^2.0.0-rc.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.2",
+    "vite": "^5.0.8",
+    "vitest": "^1.0.4",
+    "@vue/test-utils": "^2.4.3",
+    "jsdom": "^23.0.1",
+    "cypress": "^13.6.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-vue": "^9.19.2",
+    "@vue/eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.1.1",
+    "sass": "^1.69.5"
+  }
+}
