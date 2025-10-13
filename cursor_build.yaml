@@ -1,0 +1,242 @@
+# Cursor Build Plan for Employee Performance Management System (EPMS)
+# Version: 1.2 (Aligned to BRD v1.0 dated 2025-08-25)
+# Audience: Cursor Agent / Human-in-the-loop
+# Goal: Generate a full-stack MVP in 6 weeks — backend (Django REST + JSON APIs) and frontend (Vue.js)
+# ---------------------------------------------------------------------------
+# This version adds:
+# - Vue.js front-end structure instead of Next.js
+# - Test cases for each function and API endpoint (unit, integration, e2e)
+# - Fully JSON-based REST APIs
+# - Complete project documentation, Swagger, and test organization
+# ---------------------------------------------------------------------------
+
+meta:
+  project: "Employee Performance Management System (EPMS) — MVP"
+  owners: ["Product", "Engineering", "HR Ops"]
+  prepared_by: ["Imran Khalil", "Abdullah Hani"]
+  repo: "epms-mvp"
+  license: MIT
+  version: 1.2
+
+# ---------------------------------------------------------------------------
+# MONOREPO LAYOUT (UPDATED)
+# ---------------------------------------------------------------------------
+repo_structure:
+  - /backend
+      - /epms/                  # Django project root
+      - /apps/
+          - accounts/           # Authentication, roles, and user management
+          - org/                # Departments and hierarchy
+          - cycles/             # Review cycle setup
+          - goals/              # SMART goals management
+          - feedback/           # Peer feedback system
+          - reviews/            # Self/manager reviews
+          - analytics/          # HR dashboards and exports
+      - /tests/                 # All backend tests (pytest)
+      - manage.py
+      - requirements.txt
+  - /frontend
+      - /src/
+          - /components/
+          - /views/
+              - Employee/
+              - Manager/
+              - HR/
+          - /store/             # Pinia/Vuex store
+          - /router/            # Vue Router setup
+          - /api/               # Axios-based API client (JSON)
+          - App.vue
+          - main.js
+      - package.json
+      - vite.config.js
+  - /infra
+      - docker-compose.yml
+      - Dockerfile.backend
+      - Dockerfile.frontend
+  - /docs
+      - README.md
+      - API_REFERENCE.md
+      - TEST_STRATEGY.md
+      - DEPLOYMENT_GUIDE.md
+      - SECURITY_GUIDE.md
+
+# ---------------------------------------------------------------------------
+# BACKEND DETAILS
+# ---------------------------------------------------------------------------
+backend:
+  framework: Django 5.0 + Django REST Framework (DRF 3.15)
+  api_format: JSON only
+  authentication: JWT via SimpleJWT
+  database: PostgreSQL 15
+  cache: Redis
+  testing: pytest + model_bakery + requests
+
+  api_standards:
+    - RESTful endpoints returning JSON only
+    - Use DRF serializers and pagination
+    - Swagger/OpenAPI auto-generated (drf-spectacular)
+
+# ---------------------------------------------------------------------------
+# FRONTEND DETAILS (VUE 3)
+# ---------------------------------------------------------------------------
+frontend:
+  framework: Vue 3 + Vite
+  language: JavaScript (ES2022)
+  ui: Vuetify 3 or Element Plus
+  state: Pinia (preferred) / Vuex optional
+  router: Vue Router 4
+  api_client: Axios + interceptors (JWT)
+
+  pages:
+    - /login
+    - /employee/dashboard
+    - /employee/goals
+    - /employee/feedback
+    - /employee/self-review
+    - /manager/dashboard
+    - /manager/review/:employeeId
+    - /hr/dashboard
+    - /hr/analytics
+
+  api_endpoints:
+    - Defined under /frontend/src/api/
+    - Each file corresponds to one backend module (goals.js, feedback.js, etc.)
+    - All endpoints use async/await and return JSON
+
+  api_example:
+    file: /frontend/src/api/goals.js
+    content: |
+      import axios from './axiosInstance';
+
+      export async function fetchGoals(employeeId) {
+        return axios.get(`/api/employees/${employeeId}/goals`);
+      }
+
+      export async function createGoal(employeeId, data) {
+        return axios.post(`/api/employees/${employeeId}/goals`, data);
+      }
+
+      export async function approveGoal(goalId, payload) {
+        return axios.post(`/api/goals/${goalId}/approve`, payload);
+      }
+
+# ---------------------------------------------------------------------------
+# TEST STRATEGY (BACKEND & FRONTEND)
+# ---------------------------------------------------------------------------
+testing:
+  backend:
+    framework: pytest
+    structure:
+      - /tests/unit/             # For models, serializers, and utils
+      - /tests/integration/      # For API endpoints
+      - /tests/e2e/              # Full review cycle simulation
+
+    test_files:
+      - test_auth.py             # Login/logout/profile APIs
+      - test_goals.py            # SMART validation, approval workflow
+      - test_feedback.py         # Peer feedback limits, content policy
+      - test_reviews.py          # Self/manager review workflows
+      - test_analytics.py        # HR metrics, CSV exports
+
+    sample_test_case: |
+      def test_create_goal_success(api_client, employee_user, goal_payload):
+          """Test successful creation of a SMART goal (positive path)."""
+          api_client.force_authenticate(employee_user)
+          response = api_client.post(f"/api/employees/{employee_user.id}/goals", goal_payload, format='json')
+          assert response.status_code == 201
+          assert response.data['title'] == goal_payload['title']
+
+      def test_goal_validation_failure(api_client, employee_user):
+          """Ensure invalid SMART goals are rejected with proper errors."""
+          invalid_payload = {"title": "Bad", "metric": "none"}
+          api_client.force_authenticate(employee_user)
+          response = api_client.post(f"/api/employees/{employee_user.id}/goals", invalid_payload, format='json')
+          assert response.status_code == 400
+          assert 'description' in response.data
+
+  frontend:
+    framework: Vitest + Cypress
+    structure:
+      - /tests/unit/             # Component-level tests
+      - /tests/integration/      # API integration tests
+      - /tests/e2e/              # End-to-end tests for full flow
+
+    sample_test_case: |
+      import { describe, it, expect, vi } from 'vitest';
+      import { fetchGoals } from '@/api/goals';
+
+      describe('Goals API', () => {
+        it('fetches goals successfully', async () => {
+          const mockResponse = { data: [{ id: 1, title: 'Improve Sales' }] };
+          vi.spyOn(global, 'fetch').mockResolvedValue({ json: () => mockResponse });
+          const result = await fetchGoals(1);
+          expect(result.data[0].title).toBe('Improve Sales');
+        });
+      });
+
+# ---------------------------------------------------------------------------
+# SWAGGER + DOCSTRINGS
+# ---------------------------------------------------------------------------
+swagger_configuration:
+  library: drf-spectacular
+  expose:
+    - /schema/
+    - /docs/
+    - /redoc/
+  docstring_format: Google
+  example_endpoint_docstring: |
+    @swagger_auto_schema(
+        operation_summary="Create SMART Goal",
+        operation_description="Creates a new SMART goal for the logged-in employee.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'title': openapi.Schema(type=openapi.TYPE_STRING),
+                'description': openapi.Schema(type=openapi.TYPE_STRING),
+                'metric': openapi.Schema(type=openapi.TYPE_STRING),
+                'target_date': openapi.Schema(type=openapi.TYPE_STRING, format='date'),
+                'weight': openapi.Schema(type=openapi.TYPE_NUMBER),
+            },
+        ),
+        responses={
+            201: 'Goal created successfully',
+            400: 'Validation error'
+        }
+    )
+    def create(self, request, *args, **kwargs):
+        """Create a SMART goal for the employee."""
+        return super().create(request, *args, **kwargs)
+
+# ---------------------------------------------------------------------------
+# INFRASTRUCTURE
+# ---------------------------------------------------------------------------
+infra:
+  docker_compose:
+    services:
+      backend:
+        build: ./backend
+        command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+        ports: ["8000:8000"]
+      frontend:
+        build: ./frontend
+        command: ["npm", "run", "dev"]
+        ports: ["5173:5173"]
+      db:
+        image: postgres:15
+        ports: ["5432:5432"]
+      redis:
+        image: redis:7
+
+# ---------------------------------------------------------------------------
+# EXECUTION PLAN FOR CURSOR AGENT
+# ---------------------------------------------------------------------------
+cursor_execution:
+  steps:
+    - Generate backend skeleton with Django REST and docstrings
+    - Implement all models, views, and serializers with Swagger decorators
+    - Auto-generate test cases under /tests for every function
+    - Scaffold Vue 3 front-end with pages, API client, and store
+    - Implement Axios API integrations and JSON payload handling
+    - Add Cypress and Vitest for automated FE testing
+    - Ensure Swagger and pytest pass before Dockerizing the project
+    - Validate REST compliance with drf-spectacular and lint docstrings
