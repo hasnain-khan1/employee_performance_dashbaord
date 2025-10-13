@@ -7,7 +7,7 @@
       dark
       elevation="2"
     >
-      <v-app-bar-nav-icon @click="drawer = !drawer" />
+      <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
       
       <v-toolbar-title>
         <router-link to="/" class="text-decoration-none text-white">

@@ -1,6 +1,12 @@
 import api from './axios'
 
 export const analyticsAPI = {
+  // Dashboard statistics
+  getDashboardStats: () => api.get('/analytics/dashboard-stats/'),
+  getEmployeeStats: () => api.get('/analytics/employee-stats/'),
+  getManagerStats: () => api.get('/analytics/manager-stats/'),
+  getHRStats: () => api.get('/analytics/hr-stats/'),
+  
   // Reports
   getReports: (params = {}) => api.get('/analytics/reports/', { params }),
   getReport: (id) => api.get(`/analytics/reports/${id}/`),
@@ -17,15 +23,11 @@ export const analyticsAPI = {
   deleteDashboard: (id) => api.delete(`/analytics/dashboards/${id}/`),
   
   // Metrics
-  getMetrics: () => api.get('/analytics/metrics/'),
+  getMetrics: (params = {}) => api.get('/analytics/metrics/', { params }),
   getMetric: (id) => api.get(`/analytics/metrics/${id}/`),
   createMetric: (data) => api.post('/analytics/metrics/', data),
   updateMetric: (id, data) => api.patch(`/analytics/metrics/${id}/`, data),
-  deleteMetric: (id) => api.delete(`/analytics/metrics/${id}/`),
-  
-  // Analytics data
-  getPerformanceData: (params = {}) => api.get('/analytics/performance/', { params }),
-  getGoalsData: (params = {}) => api.get('/analytics/goals/', { params }),
-  getFeedbackData: (params = {}) => api.get('/analytics/feedback/', { params }),
-  getReviewsData: (params = {}) => api.get('/analytics/reviews/', { params }),
+  deleteMetric: (id) => api.delete(`/analytics/metrics/${id}/`)
 }
+
+export default analyticsAPI

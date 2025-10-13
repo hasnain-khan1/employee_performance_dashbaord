@@ -5,7 +5,7 @@ import { useToast } from 'vue-toastification'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
-  const user = ref(null)
+  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
   const token = ref(localStorage.getItem('access_token'))
   const refreshToken = ref(localStorage.getItem('refresh_token'))
   const loading = ref(false)
@@ -31,6 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Save to localStorage
       localStorage.setItem('access_token', token.value)
       localStorage.setItem('refresh_token', refreshToken.value)
+      localStorage.setItem('user', JSON.stringify(response.data.user))
       
       return response.data
     } catch (error) {
@@ -68,6 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Clear localStorage
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user')
     }
   }
 
@@ -79,6 +81,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await authAPI.getProfile()
       user.value = response.data
+      localStorage.setItem('user', JSON.stringify(response.data))
       return true
     } catch (error) {
       // Token might be expired, try to refresh
@@ -118,6 +121,7 @@ export const useAuthStore = defineStore('auth', () => {
       loading.value = true
       const response = await authAPI.updateProfile(profileData)
       user.value = response.data
+      localStorage.setItem('user', JSON.stringify(response.data))
       return response.data
     } catch (error) {
       throw error
