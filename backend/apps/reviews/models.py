@@ -9,6 +9,9 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.translation import gettext_lazy as _
 
+# Import structured self-review models (BR-027 through BR-031)
+from .self_review_models import SelfReview, SelfReviewVersion, SelfReviewAttachment
+
 
 class Review(models.Model):
     """
