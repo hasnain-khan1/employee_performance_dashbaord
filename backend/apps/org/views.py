@@ -69,8 +69,8 @@ class DepartmentListView(generics.ListCreateAPIView):
         return queryset.order_by('name')
     
     @extend_schema(
-        operation_summary="List Departments",
-        operation_description="Get a list of departments with optional filtering.",
+        summary="List Departments",
+        description="Get a list of departments with optional filtering.",
         parameters=[
             OpenApiParameter(
                 name='parent',
@@ -101,8 +101,8 @@ class DepartmentListView(generics.ListCreateAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Create Department",
-        operation_description="Create a new department.",
+        summary="Create Department",
+        description="Create a new department.",
         responses={
             201: DepartmentSerializer,
             400: "Validation error",
@@ -127,8 +127,8 @@ class DepartmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @extend_schema(
-        operation_summary="Get Department Details",
-        operation_description="Retrieve detailed information about a specific department.",
+        summary="Get Department Details",
+        description="Retrieve detailed information about a specific department.",
         responses={
             200: DepartmentSerializer,
             404: "Department not found",
@@ -140,8 +140,8 @@ class DepartmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Update Department",
-        operation_description="Update department information.",
+        summary="Update Department",
+        description="Update department information.",
         responses={
             200: DepartmentSerializer,
             400: "Validation error",
@@ -154,8 +154,8 @@ class DepartmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().patch(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Delete Department",
-        operation_description="Delete a department.",
+        summary="Delete Department",
+        description="Delete a department.",
         responses={
             204: "Department deleted successfully",
             404: "Department not found",
@@ -186,8 +186,8 @@ class DepartmentHierarchyView(generics.ListAPIView):
         ).select_related('manager')
     
     @extend_schema(
-        operation_summary="Get Department Hierarchy",
-        operation_description="Get hierarchical view of departments with nested sub-departments.",
+        summary="Get Department Hierarchy",
+        description="Get hierarchical view of departments with nested sub-departments.",
         responses={
             200: DepartmentHierarchySerializer(many=True),
             401: "Authentication required"
@@ -241,8 +241,8 @@ class TeamListView(generics.ListCreateAPIView):
         return queryset.order_by('name')
     
     @extend_schema(
-        operation_summary="List Teams",
-        operation_description="Get a list of teams with optional filtering.",
+        summary="List Teams",
+        description="Get a list of teams with optional filtering.",
         parameters=[
             OpenApiParameter(
                 name='department',
@@ -273,8 +273,8 @@ class TeamListView(generics.ListCreateAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Create Team",
-        operation_description="Create a new team.",
+        summary="Create Team",
+        description="Create a new team.",
         responses={
             201: TeamSerializer,
             400: "Validation error",
@@ -299,8 +299,8 @@ class TeamDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @extend_schema(
-        operation_summary="Get Team Details",
-        operation_description="Retrieve detailed information about a specific team.",
+        summary="Get Team Details",
+        description="Retrieve detailed information about a specific team.",
         responses={
             200: TeamSerializer,
             404: "Team not found",
@@ -312,8 +312,8 @@ class TeamDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Update Team",
-        operation_description="Update team information.",
+        summary="Update Team",
+        description="Update team information.",
         responses={
             200: TeamSerializer,
             400: "Validation error",
@@ -326,8 +326,8 @@ class TeamDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().patch(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Delete Team",
-        operation_description="Delete a team.",
+        summary="Delete Team",
+        description="Delete a team.",
         responses={
             204: "Team deleted successfully",
             404: "Team not found",
@@ -364,8 +364,8 @@ class TeamMembershipView(generics.ListCreateAPIView):
         return TeamMembershipSerializer
     
     @extend_schema(
-        operation_summary="List Team Members",
-        operation_description="Get list of team members.",
+        summary="List Team Members",
+        description="Get list of team members.",
         responses={
             200: TeamMembershipSerializer(many=True),
             401: "Authentication required"
@@ -376,8 +376,8 @@ class TeamMembershipView(generics.ListCreateAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Add Team Member",
-        operation_description="Add a user to the team.",
+        summary="Add Team Member",
+        description="Add a user to the team.",
         responses={
             201: TeamMembershipSerializer,
             400: "Validation error",
@@ -433,8 +433,8 @@ class PositionListView(generics.ListCreateAPIView):
         return queryset.order_by('title')
     
     @extend_schema(
-        operation_summary="List Positions",
-        operation_description="Get a list of positions with optional filtering.",
+        summary="List Positions",
+        description="Get a list of positions with optional filtering.",
         parameters=[
             OpenApiParameter(
                 name='department',
@@ -471,8 +471,8 @@ class PositionListView(generics.ListCreateAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Create Position",
-        operation_description="Create a new position.",
+        summary="Create Position",
+        description="Create a new position.",
         responses={
             201: PositionSerializer,
             400: "Validation error",
@@ -497,8 +497,8 @@ class PositionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @extend_schema(
-        operation_summary="Get Position Details",
-        operation_description="Retrieve detailed information about a specific position.",
+        summary="Get Position Details",
+        description="Retrieve detailed information about a specific position.",
         responses={
             200: PositionSerializer,
             404: "Position not found",
@@ -510,8 +510,8 @@ class PositionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Update Position",
-        operation_description="Update position information.",
+        summary="Update Position",
+        description="Update position information.",
         responses={
             200: PositionSerializer,
             400: "Validation error",
@@ -524,8 +524,8 @@ class PositionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().patch(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Delete Position",
-        operation_description="Delete a position.",
+        summary="Delete Position",
+        description="Delete a position.",
         responses={
             204: "Position deleted successfully",
             404: "Position not found",

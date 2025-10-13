@@ -40,8 +40,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     """
     
     @extend_schema(
-        operation_summary="Login User",
-        operation_description="Authenticate user and return JWT tokens with user data.",
+        summary="Login User",
+        description="Authenticate user and return JWT tokens with user data.",
         responses={
             200: "Login successful",
             401: "Invalid credentials"
@@ -74,8 +74,8 @@ class UserRegistrationView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
     
     @extend_schema(
-        operation_summary="Register New User",
-        operation_description="Create a new user account in the system.",
+        summary="Register New User",
+        description="Create a new user account in the system.",
         responses={
             201: "User created successfully",
             400: "Validation error"
@@ -101,8 +101,8 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return self.request.user
     
     @extend_schema(
-        operation_summary="Get User Profile",
-        operation_description="Retrieve current user's profile information.",
+        summary="Get User Profile",
+        description="Retrieve current user's profile information.",
         responses={
             200: UserSerializer,
             401: "Authentication required"
@@ -113,8 +113,8 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Update User Profile",
-        operation_description="Update current user's profile information.",
+        summary="Update User Profile",
+        description="Update current user's profile information.",
         responses={
             200: UserSerializer,
             400: "Validation error",
@@ -126,8 +126,8 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return super().patch(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Update User Profile",
-        operation_description="Update current user's profile information.",
+        summary="Update User Profile",
+        description="Update current user's profile information.",
         responses={
             200: UserSerializer,
             400: "Validation error",
@@ -157,8 +157,8 @@ class UserProfileExtendedView(generics.RetrieveUpdateAPIView):
         return profile
     
     @extend_schema(
-        operation_summary="Get Extended Profile",
-        operation_description="Retrieve user's extended profile information.",
+        summary="Get Extended Profile",
+        description="Retrieve user's extended profile information.",
         responses={
             200: UserProfileSerializer,
             401: "Authentication required"
@@ -169,8 +169,8 @@ class UserProfileExtendedView(generics.RetrieveUpdateAPIView):
         return super().get(request, *args, **kwargs)
     
     @extend_schema(
-        operation_summary="Update Extended Profile",
-        operation_description="Update user's extended profile information.",
+        summary="Update Extended Profile",
+        description="Update user's extended profile information.",
         responses={
             200: UserProfileSerializer,
             400: "Validation error",
@@ -224,8 +224,8 @@ class UserListView(generics.ListAPIView):
         return queryset.order_by('employee_id')
     
     @extend_schema(
-        operation_summary="List Users",
-        operation_description="Get a list of users with optional filtering.",
+        summary="List Users",
+        description="Get a list of users with optional filtering.",
         parameters=[
             OpenApiParameter(
                 name='role',
@@ -278,8 +278,8 @@ class UserDetailView(generics.RetrieveAPIView):
         return User.objects.all()
     
     @extend_schema(
-        operation_summary="Get User Details",
-        operation_description="Retrieve detailed information about a specific user.",
+        summary="Get User Details",
+        description="Retrieve detailed information about a specific user.",
         responses={
             200: UserSerializer,
             404: "User not found",
@@ -301,8 +301,8 @@ class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     @extend_schema(
-        operation_summary="Change Password",
-        operation_description="Change the current user's password.",
+        summary="Change Password",
+        description="Change the current user's password.",
         request=ChangePasswordSerializer,
         responses={
             200: "Password changed successfully",
@@ -339,8 +339,8 @@ class PasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
     
     @extend_schema(
-        operation_summary="Request Password Reset",
-        operation_description="Send password reset email to the user.",
+        summary="Request Password Reset",
+        description="Send password reset email to the user.",
         request=PasswordResetSerializer,
         responses={
             200: "Password reset email sent",
@@ -380,11 +380,11 @@ class PasswordResetView(APIView):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 @extend_schema(
-    operation_summary="Logout User",
-    operation_description="Logout the current user by blacklisting the refresh token.",
+    summary="Logout User",
+    description="Logout the current user by blacklisting the refresh token.",
     responses={
         200: "Logout successful",
-            401: "Authentication required"
+        401: "Authentication required"
     }
 )
 def logout_view(request):
