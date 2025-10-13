@@ -196,7 +196,7 @@
 
     <!-- Create/Edit Dialog -->
     <v-dialog v-model="dialog" max-width="600" persistent>
-      <v-card>
+      <v-card class="cycle-dialog-card">
         <v-card-title class="bg-primary">
           <span class="text-white">{{ isEditing ? 'Edit' : 'Create' }} Review Cycle</span>
           <v-spacer></v-spacer>
@@ -489,5 +489,14 @@ onMounted(() => {
 
 .bg-success {
   background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%);
+}
+
+.cycle-dialog-card {
+  background-color: white !important;
+  opacity: 1 !important;
+}
+
+.cycle-dialog-card .v-card-text {
+  background-color: white;
 }
 </style>

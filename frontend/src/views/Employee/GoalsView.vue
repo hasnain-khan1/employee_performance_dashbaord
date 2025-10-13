@@ -108,12 +108,23 @@
                 @click="viewGoal(item)"
               />
               <v-btn
+                v-if="item.status === 'draft'"
+                icon="mdi-send"
+                size="small"
+                variant="text"
+                color="primary"
+                @click="submitGoalForApproval(item)"
+                title="Submit for Approval"
+              />
+              <v-btn
+                v-if="item.status === 'draft'"
                 icon="mdi-pencil"
                 size="small"
                 variant="text"
                 @click="editGoal(item)"
               />
               <v-btn
+                v-if="item.status === 'draft'"
                 icon="mdi-delete"
                 size="small"
                 variant="text"
@@ -133,7 +144,7 @@
       persistent
       :scrim="true"
     >
-      <v-card elevation="8">
+      <v-card elevation="8" class="goal-dialog-card">
         <v-card-title class="text-h5 bg-primary pa-4">
           {{ editingGoal ? 'Edit Goal' : 'Create New Goal' }}
         </v-card-title>
@@ -307,13 +318,23 @@
             Cancel
           </v-btn>
           <v-btn
+            v-if="!editingGoal"
+            color="secondary"
+            variant="outlined"
+            :disabled="!formValid"
+            :loading="saving"
+            @click="saveGoalAsDraft"
+          >
+            Save as Draft
+          </v-btn>
+          <v-btn
             color="primary"
             variant="elevated"
             :disabled="!formValid"
             :loading="saving"
-            @click="saveGoal"
+            @click="editingGoal ? saveGoal : submitGoal"
           >
-            {{ editingGoal ? 'Update Goal' : 'Create Goal' }}
+            {{ editingGoal ? 'Update Goal' : 'Submit for Approval' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -448,6 +469,66 @@ const closeGoalDialog = () => {
   editingGoal.value = null
 }
 
+const saveGoalAsDraft = async () => {
+  await saveGoalWithStatus('draft', 'Goal saved as draft')
+}
+
+const submitGoal = async () => {
+  await saveGoalWithStatus('submitted', 'Goal submitted for approval')
+}
+
+const saveGoalWithStatus = async (status, successMessage) => {
+  // Validate the form
+  if (goalFormRef.value) {
+    const { valid } = await goalFormRef.value.validate()
+    if (!valid) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+  } else if (!formValid.value) {
+    toast.error('Please fill in all required fields')
+    return
+  }
+
+  try {
+    saving.value = true
+    
+    // Create a clean copy of the form data (avoid circular references)
+    const goalData = {
+      title: goalForm.value.title,
+      description: goalForm.value.description,
+      goal_type: goalForm.value.goal_type,
+      priority: goalForm.value.priority,
+      metric: goalForm.value.metric,
+      target_value: goalForm.value.target_value ? parseFloat(goalForm.value.target_value) : null,
+      start_date: goalForm.value.start_date,
+      target_date: goalForm.value.target_date,
+      weight: goalForm.value.weight ? parseInt(goalForm.value.weight) : 10,
+      specific: goalForm.value.specific,
+      measurable: goalForm.value.measurable,
+      achievable: goalForm.value.achievable,
+      relevant: goalForm.value.relevant,
+      time_bound: goalForm.value.time_bound,
+      status: status
+    }
+    
+    console.log('Saving goal with data:', goalData)
+    
+    const response = await goalsAPI.createGoal(goalData)
+    console.log('Goal created:', response.data)
+    toast.success(successMessage)
+    
+    closeGoalDialog()
+    await loadGoals()
+  } catch (error) {
+    console.error('Error saving goal:', error)
+    const errorMsg = error.response?.data?.message || error.message || 'Failed to save goal'
+    toast.error(errorMsg)
+  } finally {
+    saving.value = false
+  }
+}
+
 const saveGoal = async () => {
   // Validate the form
   if (goalFormRef.value) {
@@ -482,16 +563,10 @@ const saveGoal = async () => {
       time_bound: goalForm.value.time_bound
     }
     
-    console.log('Saving goal with data:', goalData)
+    console.log('Updating goal with data:', goalData)
     
-    if (editingGoal.value) {
-      await goalsAPI.updateGoal(editingGoal.value.id, goalData)
-      toast.success('Goal updated successfully')
-    } else {
-      const response = await goalsAPI.createGoal(goalData)
-      console.log('Goal created:', response.data)
-      toast.success('Goal created successfully')
-    }
+    await goalsAPI.updateGoal(editingGoal.value.id, goalData)
+    toast.success('Goal updated successfully')
     
     closeGoalDialog()
     await loadGoals()
@@ -523,6 +598,19 @@ const deleteGoal = async (goal) => {
     } catch (error) {
       console.error('Error deleting goal:', error)
       toast.error('Failed to delete goal')
+    }
+  }
+}
+
+const submitGoalForApproval = async (goal) => {
+  if (confirm(`Submit "${goal.title}" for approval?`)) {
+    try {
+      await goalsAPI.updateGoal(goal.id, { status: 'submitted' })
+      toast.success('Goal submitted for approval')
+      loadGoals()
+    } catch (error) {
+      console.error('Error submitting goal:', error)
+      toast.error('Failed to submit goal')
     }
   }
 }
@@ -579,6 +667,15 @@ onMounted(() => {
 
 /* Card styling */
 .v-card {
+  background-color: white !important;
+}
+
+.goal-dialog-card {
+  background-color: white !important;
+  opacity: 1 !important;
+}
+
+.goal-dialog-card .v-card-text {
   background-color: white !important;
 }
 

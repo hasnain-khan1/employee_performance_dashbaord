@@ -228,7 +228,7 @@
 
     <!-- Report Detail Dialog -->
     <v-dialog v-model="detailDialog" max-width="700">
-      <v-card v-if="selectedReport">
+      <v-card v-if="selectedReport" class="report-detail-card">
         <v-card-title class="bg-primary">
           <span class="text-white">Report Details</span>
           <v-spacer></v-spacer>
@@ -398,7 +398,10 @@ const loadReports = async () => {
     }
     
     const response = await api.get('/analytics/reports/', { params })
-    reports.value = response.data
+    // Handle different response formats (array, paginated results, etc.)
+    reports.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.results || [])
   } catch (error) {
     console.error('Error loading reports:', error)
     toast.error('Failed to load reports')
@@ -410,7 +413,10 @@ const loadReports = async () => {
 const loadDepartments = async () => {
   try {
     const response = await api.get('/org/departments/')
-    departments.value = response.data
+    // Handle different response formats (array, paginated results, etc.)
+    departments.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.results || [])
   } catch (error) {
     console.error('Error loading departments:', error)
   }
@@ -558,5 +564,14 @@ onMounted(() => {
 <style scoped>
 .v-card {
   margin-bottom: 16px;
+}
+
+.report-detail-card {
+  background-color: white !important;
+  opacity: 1 !important;
+}
+
+.report-detail-card .v-card-text {
+  background-color: white;
 }
 </style>
