@@ -245,7 +245,7 @@
     </v-row>
 
     <!-- Import Success Dialog -->
-    <v-dialog v-model="importSuccessDialog" max-width="500">
+    <v-dialog v-model="importSuccessDialog" max-width="600">
       <v-card>
         <v-card-title class="bg-success">
           <v-icon left>mdi-check-circle</v-icon>
@@ -258,7 +258,22 @@
             <li>Updated: {{ importResult.updated_count }} existing employees</li>
             <li>Total: {{ importResult.total_processed }} employees processed</li>
           </ul>
-          <v-alert type="info" variant="tonal" class="mt-4">
+          
+          <v-alert type="success" variant="tonal" class="mt-4">
+            <div class="d-flex align-center">
+              <v-icon class="mr-2">mdi-information</v-icon>
+              <div>
+                <strong>Next Steps:</strong>
+                <ul class="mt-2">
+                  <li>View imported employees in the <strong>All Employees</strong> page</li>
+                  <li>Verify manager relationships and organizational hierarchy</li>
+                  <li>Review employee details and make any necessary adjustments</li>
+                </ul>
+              </div>
+            </div>
+          </v-alert>
+          
+          <v-alert type="info" variant="tonal" class="mt-2">
             All new employees have been assigned the default password: <strong>ChangeMe123!</strong>
             <br />
             They will need to change this password on first login.
@@ -267,10 +282,17 @@
         <v-card-actions>
           <v-spacer />
           <v-btn
-            color="primary"
+            variant="outlined"
             @click="closeSuccessDialog"
           >
-            Close
+            Import More
+          </v-btn>
+          <v-btn
+            color="primary"
+            @click="viewEmployees"
+          >
+            <v-icon left>mdi-account-group</v-icon>
+            View Employees
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -280,9 +302,11 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { authAPI } from '@/api/auth'
 import { useToast } from 'vue-toastification'
 
+const router = useRouter()
 const toast = useToast()
 
 // State
@@ -332,8 +356,11 @@ const downloadTemplate = async () => {
 
 const onFileSelected = () => {
   if (selectedFile.value) {
+    // Handle both single file and array format
+    const file = Array.isArray(selectedFile.value) ? selectedFile.value[0] : selectedFile.value
+    
     // Validate file type
-    if (!selectedFile.value[0]?.name.endsWith('.csv')) {
+    if (file && !file.name.endsWith('.csv')) {
       toast.error('Please select a CSV file')
       selectedFile.value = null
     }
@@ -341,7 +368,7 @@ const onFileSelected = () => {
 }
 
 const uploadAndValidate = async () => {
-  if (!selectedFile.value || selectedFile.value.length === 0) {
+  if (!selectedFile.value) {
     toast.error('Please select a file')
     return
   }
@@ -349,8 +376,16 @@ const uploadAndValidate = async () => {
   try {
     uploading.value = true
     
+    // Handle both single file and array format
+    const file = Array.isArray(selectedFile.value) ? selectedFile.value[0] : selectedFile.value
+    
+    if (!file) {
+      toast.error('Please select a file')
+      return
+    }
+    
     const formData = new FormData()
-    formData.append('file', selectedFile.value[0])
+    formData.append('file', file)
     
     const response = await authAPI.uploadCSV(formData)
     validationResults.value = response.data
@@ -403,6 +438,11 @@ const resetUpload = () => {
 const closeSuccessDialog = () => {
   importSuccessDialog.value = false
   resetUpload()
+}
+
+const viewEmployees = () => {
+  importSuccessDialog.value = false
+  router.push('/hr/employees')
 }
 </script>
 

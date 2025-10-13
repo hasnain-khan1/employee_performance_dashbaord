@@ -33,33 +33,6 @@ class CSVUploadValidateView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
     
-    def post(self, request):
-        """Upload and validate CSV file."""
-        # Check if user is HR
-        if not request.user.is_hr:
-            return Response(
-                {'detail': 'Only HR administrators can import employee data'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        serializer = CSVUploadSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        csv_file = serializer.validated_data['file']
-        
-        # Parse and validate CSV
-        importer = EmployeeCSVImporter()
-        success, result = importer.parse_csv(csv_file)
-        
-        return Response(
-            result,
-            status=status.HTTP_200_OK
-        )
-    
     @extend_schema(
         summary="Upload and Validate CSV",
         description="""
@@ -99,7 +72,31 @@ class CSVUploadValidateView(APIView):
         }
     )
     def post(self, request):
-        return super().post(request)
+        """Upload and validate CSV file."""
+        # Check if user is HR
+        if not request.user.is_hr:
+            return Response(
+                {'detail': 'Only HR administrators can import employee data'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = CSVUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        csv_file = serializer.validated_data['file']
+        
+        # Parse and validate CSV
+        importer = EmployeeCSVImporter()
+        success, result = importer.parse_csv(csv_file)
+        
+        return Response(
+            result,
+            status=status.HTTP_200_OK
+        )
 
 
 class CSVImportConfirmView(APIView):
@@ -112,39 +109,6 @@ class CSVImportConfirmView(APIView):
     """
     
     permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        """Execute CSV import with validated data."""
-        # Check if user is HR
-        if not request.user.is_hr:
-            return Response(
-                {'detail': 'Only HR administrators can import employee data'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        serializer = CSVImportConfirmSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        parsed_data = serializer.validated_data['parsed_data']
-        
-        # Execute import
-        importer = EmployeeCSVImporter()
-        success, result = importer.import_employees(parsed_data)
-        
-        if success:
-            return Response(
-                result,
-                status=status.HTTP_201_CREATED
-            )
-        else:
-            return Response(
-                result,
-                status=status.HTTP_400_BAD_REQUEST
-            )
     
     @extend_schema(
         summary="Confirm CSV Import",
@@ -177,7 +141,37 @@ class CSVImportConfirmView(APIView):
         }
     )
     def post(self, request):
-        return super().post(request)
+        """Execute CSV import with validated data."""
+        # Check if user is HR
+        if not request.user.is_hr:
+            return Response(
+                {'detail': 'Only HR administrators can import employee data'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = CSVImportConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        parsed_data = serializer.validated_data['parsed_data']
+        
+        # Execute import
+        importer = EmployeeCSVImporter()
+        success, result = importer.import_employees(parsed_data)
+        
+        if success:
+            return Response(
+                result,
+                status=status.HTTP_201_CREATED
+            )
+        else:
+            return Response(
+                result,
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class CSVTemplateDownloadView(APIView):
@@ -190,6 +184,23 @@ class CSVTemplateDownloadView(APIView):
     
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(
+        summary="Download CSV Template",
+        description="""
+        Download a CSV template file with the correct format for employee import.
+        
+        The template includes:
+        - All required and optional column headers
+        - Example rows showing proper data format
+        - Comments explaining each field
+        
+        Use this template to ensure your CSV file is formatted correctly
+        before uploading for validation and import.
+        """,
+        responses={
+            200: OpenApiResponse(description='CSV template file')
+        }
+    )
     def get(self, request):
         """Download CSV template."""
         from django.http import HttpResponse
@@ -221,24 +232,4 @@ class CSVTemplateDownloadView(APIView):
         ])
         
         return response
-    
-    @extend_schema(
-        summary="Download CSV Template",
-        description="""
-        Download a CSV template file with the correct format for employee import.
-        
-        The template includes:
-        - All required and optional column headers
-        - Example rows showing proper data format
-        - Comments explaining each field
-        
-        Use this template to ensure your CSV file is formatted correctly
-        before uploading for validation and import.
-        """,
-        responses={
-            200: OpenApiResponse(description='CSV template file')
-        }
-    )
-    def get(self, request):
-        return super().get(request)
 

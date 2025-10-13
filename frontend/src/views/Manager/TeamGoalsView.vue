@@ -207,16 +207,21 @@ const loadTeamData = async () => {
   try {
     loading.value = true
     
-    // Load team members with their goals
-    const response = await api.get('/auth/users/', { 
-      params: { manager: 'me' }  // Get users managed by current user
-    })
+    // Get current user's profile to find their ID
+    const profileResponse = await api.get('/auth/profile/')
+    const currentUserId = profileResponse.data.id
+    
+    // Load all users and filter for direct reports
+    const response = await api.get('/auth/users/')
     
     // Process team members and their goals
     // Handle different response formats (array, paginated results, etc.)
-    const members = Array.isArray(response.data) 
+    const allUsers = Array.isArray(response.data) 
       ? response.data 
       : (response.data?.results || [])
+    
+    // Filter for direct reports (users whose manager is the current user)
+    const members = allUsers.filter(user => user.manager === currentUserId)
     
     for (let member of members) {
       try {
@@ -253,29 +258,36 @@ const loadTeamData = async () => {
     
     teamMembers.value = members.map(m => ({
       id: m.id,
-      name: m.full_name,
+      name: m.full_name || `${m.first_name} ${m.last_name}`,
       employee_id: m.employee_id,
-      role: m.position?.title || 'No Position',
+      role: m.job_title || 'No Position',
       goals_count: m.goals_count || 0,
       completion_rate: m.completion_rate || 0,
       last_update: m.last_update,
-      avatar: m.userprofile?.avatar
+      avatar: m.avatar
     }))
     
-    // Load pending goal approvals
+    // Load pending goal approvals - get all submitted goals and filter for team members
     const approvalsResponse = await api.get('/goals/', {
-      params: { status: 'submitted', manager: 'me' }
+      params: { status: 'submitted' }
     })
     
     // Handle different response formats
-    const approvals = Array.isArray(approvalsResponse.data)
+    const allApprovals = Array.isArray(approvalsResponse.data)
       ? approvalsResponse.data
       : (approvalsResponse.data?.results || [])
     
-    pendingApprovals.value = approvals.map(goal => ({
+    // Filter for goals from direct reports only
+    const teamMemberIds = members.map(m => m.id)
+    const teamApprovals = allApprovals.filter(goal => 
+      teamMemberIds.includes(goal.employee?.id || goal.employee)
+    )
+    
+    pendingApprovals.value = teamApprovals.map(goal => ({
       id: goal.id,
       goal_title: goal.title,
-      employee_name: goal.employee?.full_name || 'Unknown',
+      employee_name: goal.employee?.full_name || goal.employee?.first_name + ' ' + goal.employee?.last_name || 'Unknown',
+      employee_id: goal.employee?.id || goal.employee,
       submitted_at: goal.created_at
     }))
     
@@ -294,14 +306,41 @@ const getGoalsCountColor = (count) => {
   return 'grey'
 }
 
-const viewMemberGoals = (member) => {
-  // Navigate to member's goals
-  console.log('View goals for:', member.name)
+const viewMemberGoals = async (member) => {
+  try {
+    // Load member's goals and show them
+    const goalsResponse = await api.get('/goals/', {
+      params: { employee: member.id }
+    })
+    
+    const goals = Array.isArray(goalsResponse.data)
+      ? goalsResponse.data
+      : (goalsResponse.data?.results || [])
+    
+    if (goals.length === 0) {
+      toast.info(`${member.name} has no goals yet`)
+      return
+    }
+    
+    // Show goals information
+    const goalsInfo = goals.map(g => 
+      `• ${g.title} (${g.status})`
+    ).join('\n')
+    
+    toast.info(`Goals for ${member.name}:\n${goalsInfo}`, { 
+      timeout: 5000 
+    })
+  } catch (error) {
+    console.error('Error loading member goals:', error)
+    toast.error('Failed to load member goals')
+  }
 }
 
 const sendFeedback = (member) => {
-  // Open feedback dialog
-  console.log('Send feedback to:', member.name)
+  // For now, show info message
+  toast.info(`Feedback feature for ${member.name} will be implemented soon`, {
+    timeout: 3000
+  })
 }
 
 const approveGoal = async (approval) => {

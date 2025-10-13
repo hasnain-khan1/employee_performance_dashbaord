@@ -141,8 +141,8 @@ class GoalSerializer(serializers.ModelSerializer):
         """
         # Get employee and cycle from context if not in data
         request = self.context.get('request')
-        employee = data.get('employee') or (request.user if request else None)
-        cycle = data.get('cycle')
+        employee = data.get('employee') or (self.instance.employee if self.instance else None) or (request.user if request else None)
+        cycle = data.get('cycle') or (self.instance.cycle if self.instance else None)
         
         # BR-012: Maximum 5 goals per employee per cycle
         if not self.instance:  # Only for new goals
@@ -160,9 +160,15 @@ class GoalSerializer(serializers.ModelSerializer):
                     })
         
         # BR-013: Validate weight totals
-        if 'weight' in data and employee and cycle:
-            status = data.get('status', self.instance.status if self.instance else 'draft')
-            
+        # Check if we're updating status to submitted/approved or if weight is changing
+        status = data.get('status', self.instance.status if self.instance else 'draft')
+        weight_changed = 'weight' in data
+        status_changed = 'status' in data and self.instance and data['status'] != self.instance.status
+        
+        # Validate weight totals when:
+        # 1. Weight is being changed, OR
+        # 2. Status is being changed to submitted/approved/in_progress
+        if (weight_changed or (status_changed and status in ['submitted', 'approved', 'in_progress'])) and employee and cycle:
             # Get existing goals weight
             existing_goals = Goal.objects.filter(
                 employee=employee,
@@ -173,18 +179,20 @@ class GoalSerializer(serializers.ModelSerializer):
                 existing_goals = existing_goals.exclude(pk=self.instance.pk)
             
             existing_weight = sum(g.weight for g in existing_goals)
-            new_total = existing_weight + data['weight']
+            current_weight = data.get('weight', self.instance.weight if self.instance else 0)
+            new_total = existing_weight + current_weight
             
             # Enforce 100% total for submitted/approved goals
             if status in ['submitted', 'approved', 'in_progress']:
                 if new_total != 100:
                     raise serializers.ValidationError({
-                        'weight': f'Total weight must equal exactly 100% when submitting goals. '
+                        'status': f'Cannot submit goals for approval. Total weight must equal exactly 100%. '
                                  f'Current total: {new_total}%. '
                                  f'Existing goals weight: {existing_weight}%. '
+                                 f'This goal weight: {current_weight}%. '
                                  f'Adjust goal weights so they sum to 100%.'
                     })
-            else:
+            elif weight_changed:
                 # For draft, just prevent exceeding 100%
                 if new_total > 100:
                     raise serializers.ValidationError({

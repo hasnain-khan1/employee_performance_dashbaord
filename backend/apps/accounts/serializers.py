@@ -119,6 +119,7 @@ class UserSerializer(serializers.ModelSerializer):
     """
     
     profile = UserProfileSerializer(read_only=True)
+    full_name = serializers.SerializerMethodField()
     manager_name = serializers.CharField(
         source='manager.get_full_name',
         read_only=True
@@ -134,11 +135,15 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'employee_id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'status', 'phone', 'hire_date', 'manager', 'manager_name',
+            'full_name', 'role', 'status', 'phone', 'hire_date', 'manager', 'manager_name',
             'department', 'department_name', 'job_title', 'bio', 'avatar',
             'profile', 'direct_reports_count', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'employee_id', 'created_at', 'updated_at']
+    
+    def get_full_name(self, obj):
+        """Get full name of the user."""
+        return obj.get_full_name() or f"{obj.first_name} {obj.last_name}".strip() or obj.username
     
     def get_direct_reports_count(self, obj):
         """Get count of direct reports."""
@@ -152,6 +157,7 @@ class UserListSerializer(serializers.ModelSerializer):
     Used in list views where full user details are not needed.
     """
     
+    full_name = serializers.SerializerMethodField()
     manager_name = serializers.CharField(
         source='manager.get_full_name',
         read_only=True
@@ -166,9 +172,13 @@ class UserListSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'employee_id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'status', 'job_title', 'manager_name', 'department_name',
-            'hire_date', 'created_at'
+            'full_name', 'role', 'status', 'job_title', 'manager', 'manager_name', 
+            'department', 'department_name', 'hire_date', 'phone', 'avatar', 'created_at'
         ]
+    
+    def get_full_name(self, obj):
+        """Get full name of the user."""
+        return obj.get_full_name() or f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
 
 class LoginSerializer(serializers.Serializer):

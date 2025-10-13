@@ -37,8 +37,8 @@
 
         <v-list>
           <v-list-item>
-            <v-list-item-title>{{ user?.full_name || 'User' }}</v-list-item-title>
-            <v-list-item-subtitle>{{ user?.employee_id }}</v-list-item-subtitle>
+            <v-list-item-title>{{ getUserName(user) }}</v-list-item-title>
+            <v-list-item-subtitle>{{ user?.employee_id || 'Employee' }}</v-list-item-subtitle>
           </v-list-item>
           <v-divider />
           <v-list-item @click="goToProfile">
@@ -199,6 +199,15 @@ const navigationItems = computed(() => {
 })
 
 // Methods
+const getUserName = (user) => {
+  if (!user) return 'User'
+  if (user.full_name) return user.full_name
+  const firstName = user.first_name || ''
+  const lastName = user.last_name || ''
+  const fullName = `${firstName} ${lastName}`.trim()
+  return fullName || user.username || user.email || 'User'
+}
+
 const goToProfile = () => {
   router.push('/profile')
 }

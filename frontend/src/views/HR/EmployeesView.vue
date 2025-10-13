@@ -123,6 +123,17 @@
                 </v-chip>
               </template>
 
+              <template v-slot:item.manager_name="{ item }">
+                <div v-if="item.manager_name" class="d-flex align-center">
+                  <v-icon size="small" class="mr-1">mdi-account-supervisor</v-icon>
+                  {{ item.manager_name }}
+                </div>
+                <v-chip v-else size="small" variant="outlined" color="grey">
+                  <v-icon start>mdi-crown</v-icon>
+                  Top Level
+                </v-chip>
+              </template>
+
               <template v-slot:item.status="{ item }">
                 <v-chip
                   :color="getStatusColor(item.status)"
@@ -132,16 +143,16 @@
                 </v-chip>
               </template>
 
-              <template v-slot:item.department="{ item }">
-                {{ item.department?.name || 'Not Assigned' }}
+              <template v-slot:item.department_name="{ item }">
+                {{ item.department_name || 'Not Assigned' }}
               </template>
 
-              <template v-slot:item.position="{ item }">
-                {{ item.position?.title || 'Not Assigned' }}
+              <template v-slot:item.job_title="{ item }">
+                {{ item.job_title || 'Not Assigned' }}
               </template>
 
-              <template v-slot:item.date_joined="{ item }">
-                {{ formatDate(item.date_joined) }}
+              <template v-slot:item.hire_date="{ item }">
+                {{ item.hire_date ? formatDate(item.hire_date) : 'N/A' }}
               </template>
 
               <template v-slot:item.actions="{ item }">
@@ -206,7 +217,7 @@
                 />
                 <v-icon v-else size="100">mdi-account-circle</v-icon>
               </v-avatar>
-              <h2 class="mt-3">{{ selectedEmployee.full_name }}</h2>
+              <h2 class="mt-3">{{ getEmployeeFullName(selectedEmployee) }}</h2>
               <p class="text-grey">{{ selectedEmployee.email }}</p>
             </v-col>
           </v-row>
@@ -228,23 +239,23 @@
             </v-col>
             <v-col cols="6">
               <div class="text-caption text-grey">Phone</div>
-              <div class="font-weight-medium">{{ selectedEmployee.userprofile?.phone_number || 'N/A' }}</div>
+              <div class="font-weight-medium">{{ selectedEmployee.phone || 'N/A' }}</div>
             </v-col>
             <v-col cols="6">
               <div class="text-caption text-grey">Department</div>
-              <div class="font-weight-medium">{{ selectedEmployee.department?.name || 'Not Assigned' }}</div>
+              <div class="font-weight-medium">{{ selectedEmployee.department_name || 'Not Assigned' }}</div>
             </v-col>
             <v-col cols="6">
               <div class="text-caption text-grey">Position</div>
-              <div class="font-weight-medium">{{ selectedEmployee.position?.title || 'Not Assigned' }}</div>
+              <div class="font-weight-medium">{{ selectedEmployee.job_title || 'Not Assigned' }}</div>
             </v-col>
             <v-col cols="6">
               <div class="text-caption text-grey">Manager</div>
-              <div class="font-weight-medium">{{ selectedEmployee.manager?.full_name || 'N/A' }}</div>
+              <div class="font-weight-medium">{{ selectedEmployee.manager_name || 'N/A' }}</div>
             </v-col>
             <v-col cols="6">
               <div class="text-caption text-grey">Date Joined</div>
-              <div class="font-weight-medium">{{ formatDate(selectedEmployee.date_joined) }}</div>
+              <div class="font-weight-medium">{{ formatDate(selectedEmployee.hire_date) }}</div>
             </v-col>
             <v-col cols="12" v-if="selectedEmployee.userprofile?.bio">
               <div class="text-caption text-grey">Bio</div>
@@ -344,6 +355,30 @@
               :rules="[v => !!v || 'Status is required']"
               prepend-inner-icon="mdi-account-check"
             />
+
+            <v-select
+              v-model="editForm.department"
+              :items="departmentOptions"
+              item-title="name"
+              item-value="id"
+              label="Department"
+              variant="outlined"
+              clearable
+              prepend-inner-icon="mdi-domain"
+            />
+
+            <v-select
+              v-model="editForm.manager"
+              :items="managerOptions"
+              item-title="full_name"
+              item-value="id"
+              label="Manager"
+              variant="outlined"
+              clearable
+              prepend-inner-icon="mdi-account-supervisor"
+              hint="Select the direct manager for this employee"
+              persistent-hint
+            />
           </v-form>
         </v-card-text>
         <v-card-actions>
@@ -373,6 +408,8 @@ const toast = useToast()
 
 // Reactive data
 const employees = ref([])
+const departments = ref([])
+const managersList = ref([])
 const loading = ref(false)
 const searchQuery = ref('')
 const filterRole = ref(null)
@@ -389,7 +426,9 @@ const editForm = ref({
   role: '',
   status: '',
   job_title: '',
-  employee_id: ''
+  employee_id: '',
+  department: null,
+  manager: null
 })
 
 // Options
@@ -412,10 +451,11 @@ const headers = [
   { title: 'Employee', key: 'full_name', sortable: true },
   { title: 'Employee ID', key: 'employee_id', sortable: true },
   { title: 'Role', key: 'role', sortable: true },
-  { title: 'Department', key: 'department', sortable: false },
-  { title: 'Position', key: 'position', sortable: false },
+  { title: 'Department', key: 'department_name', sortable: false },
+  { title: 'Manager', key: 'manager_name', sortable: false },
+  { title: 'Position', key: 'job_title', sortable: false },
   { title: 'Status', key: 'status', sortable: true },
-  { title: 'Date Joined', key: 'date_joined', sortable: true },
+  { title: 'Date Joined', key: 'hire_date', sortable: true },
   { title: 'Actions', key: 'actions', sortable: false, align: 'center' }
 ]
 
@@ -432,6 +472,24 @@ const employeeStats = computed(() => {
     { title: 'Managers', value: managers, icon: 'mdi-account-tie', color: 'blue' },
     { title: 'On Leave', value: onLeave, icon: 'mdi-calendar-clock', color: 'orange' }
   ]
+})
+
+const departmentOptions = computed(() => {
+  return departments.value
+})
+
+const managerOptions = computed(() => {
+  // Filter to show only employees with manager, hr, or admin role
+  // and exclude the employee being edited to prevent self-assignment
+  let managers = managersList.value.filter(emp => 
+    ['manager', 'hr', 'admin'].includes(emp.role)
+  )
+  
+  if (editForm.value.employee_id) {
+    managers = managers.filter(emp => emp.employee_id !== editForm.value.employee_id)
+  }
+  
+  return managers
 })
 
 // Methods
@@ -486,7 +544,9 @@ const editEmployee = (employee) => {
     role: employee.role || 'employee',
     status: employee.status || 'active',
     job_title: employee.job_title || '',
-    employee_id: employee.employee_id || ''
+    employee_id: employee.employee_id || '',
+    department: employee.department || null,
+    manager: employee.manager || null
   }
   detailDialog.value = false
   editDialog.value = true
@@ -517,7 +577,9 @@ const closeEditDialog = () => {
     role: '',
     status: '',
     job_title: '',
-    employee_id: ''
+    employee_id: '',
+    department: null,
+    manager: null
   }
 }
 
@@ -579,9 +641,51 @@ const formatDate = (dateString) => {
   })
 }
 
+const getEmployeeFullName = (employee) => {
+  if (!employee) return 'N/A'
+  if (employee.full_name) return employee.full_name
+  const firstName = employee.first_name || ''
+  const lastName = employee.last_name || ''
+  return `${firstName} ${lastName}`.trim() || 'N/A'
+}
+
+const loadDepartments = async () => {
+  try {
+    // For now, we'll extract departments from employees
+    // In the future, you could create a dedicated departments API endpoint
+    const response = await authAPI.getUsers()
+    const allEmployees = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.results || [])
+    
+    // Extract unique departments
+    const deptMap = new Map()
+    allEmployees.forEach(emp => {
+      if (emp.department) {
+        deptMap.set(emp.department, {
+          id: emp.department,
+          name: emp.department_name || `Department ${emp.department}`
+        })
+      }
+    })
+    departments.value = Array.from(deptMap.values())
+    
+    // Set managers list with role information for filtering
+    managersList.value = allEmployees.map(emp => ({
+      id: emp.id,
+      employee_id: emp.employee_id,
+      role: emp.role,
+      full_name: `${emp.first_name} ${emp.last_name} (${emp.employee_id}) - ${emp.role.toUpperCase()}`
+    }))
+  } catch (error) {
+    console.error('Error loading departments:', error)
+  }
+}
+
 // Lifecycle
 onMounted(() => {
   loadEmployees()
+  loadDepartments()
 })
 </script>
 

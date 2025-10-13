@@ -203,6 +203,8 @@
                   label="Metric"
                   :rules="[v => !!v || 'Metric is required']"
                   :readonly="viewingGoal"
+                  hint="How will success be measured? Examples: 'Increase revenue by 25%', 'Complete 10 projects', 'Reduce time to 2 hours'"
+                  persistent-hint
                   required
                 />
               </v-col>
@@ -212,6 +214,8 @@
                   label="Target Value"
                   type="number"
                   :readonly="viewingGoal"
+                  hint="Numeric target (optional). Example: 25, 10, 2"
+                  persistent-hint
                 />
               </v-col>
             </v-row>
@@ -743,10 +747,39 @@ const submitGoalForApproval = async (goal) => {
     try {
       await goalsAPI.updateGoal(goal.id, { status: 'submitted' })
       toast.success('Goal submitted for approval')
-      loadGoals()
+      await loadGoals()
     } catch (error) {
       console.error('Error submitting goal:', error)
-      toast.error('Failed to submit goal')
+      
+      // Extract detailed validation errors
+      let errorMsg = 'Failed to submit goal'
+      if (error.response?.data) {
+        const data = error.response.data
+        
+        // Handle field-specific errors
+        if (data.weight) {
+          errorMsg = Array.isArray(data.weight) ? data.weight[0] : data.weight
+        } else if (data.non_field_errors) {
+          errorMsg = Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors
+        } else if (data.status) {
+          errorMsg = Array.isArray(data.status) ? data.status[0] : data.status
+        } else if (data.message) {
+          errorMsg = data.message
+        } else if (data.detail) {
+          errorMsg = data.detail
+        } else {
+          // Combine all field errors
+          const errors = Object.entries(data).map(([field, msgs]) => {
+            const message = Array.isArray(msgs) ? msgs[0] : msgs
+            return `${field}: ${message}`
+          }).join('; ')
+          if (errors) errorMsg = errors
+        }
+      } else if (error.message) {
+        errorMsg = error.message
+      }
+      
+      toast.error(errorMsg, { timeout: 8000 })
     }
   }
 }
