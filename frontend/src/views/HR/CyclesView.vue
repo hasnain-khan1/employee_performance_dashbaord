@@ -344,7 +344,10 @@ const loadCycles = async () => {
     }
     
     const response = await api.get('/cycles/', { params })
-    cycles.value = response.data
+    // Handle different response formats (array, paginated results, etc.)
+    cycles.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.results || [])
   } catch (error) {
     console.error('Error loading cycles:', error)
     toast.error('Failed to load review cycles')

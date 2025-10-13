@@ -19,11 +19,10 @@ class GoalUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = GoalUpdate
         fields = [
-            'id', 'goal', 'progress_percentage', 'status_update',
-            'achievements', 'challenges', 'next_steps',
-            'created_at', 'updated_at'
+            'id', 'goal', 'updated_by', 'progress_percentage',
+            'current_value', 'comments', 'created_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_by']
 
 
 class GoalSerializer(serializers.ModelSerializer):
@@ -100,7 +99,7 @@ class GoalCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = GoalCategory
         fields = [
-            'id', 'name', 'description', 'color', 'icon',
+            'id', 'name', 'description', 'color',
             'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']

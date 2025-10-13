@@ -21,7 +21,7 @@ from .serializers import (
 )
 from apps.goals.models import Goal
 from apps.reviews.models import Review
-from apps.feedback.models import Feedback
+from apps.feedback.models import FeedbackRequest, FeedbackResponse
 from apps.cycles.models import ReviewCycle
 from apps.accounts.models import User
 
@@ -484,7 +484,7 @@ def dashboard_stats(request):
     ).count()
     
     # Get feedback received count
-    feedback_received = Feedback.objects.filter(recipient=user).count()
+    feedback_received = FeedbackRequest.objects.filter(recipient=user).count()
     
     # Calculate completion rate
     total_goals = Goal.objects.filter(employee=user).count()
@@ -555,7 +555,7 @@ def employee_dashboard_stats(request):
         'stats': {
             'total_goals': Goal.objects.filter(employee=user).count(),
             'completed_goals': Goal.objects.filter(employee=user, status='completed').count(),
-            'feedback_count': Feedback.objects.filter(recipient=user).count()
+            'feedback_count': FeedbackRequest.objects.filter(recipient=user).count()
         }
     })
 
@@ -617,7 +617,7 @@ def manager_dashboard_stats(request):
             'id': m.id,
             'full_name': m.full_name,
             'email': m.email,
-            'position': m.position.title if m.position else None
+            'position': m.job_title
         } for m in team_members[:10]]
     })
 
@@ -641,7 +641,7 @@ def hr_dashboard_stats(request):
     completed_reviews = Review.objects.filter(status='completed').count()
     
     # Pending feedback/actions
-    pending_feedback = Feedback.objects.filter(status='pending').count()
+    pending_feedback = FeedbackRequest.objects.filter(status='pending').count()
     
     # Department performance
     from apps.org.models import Department

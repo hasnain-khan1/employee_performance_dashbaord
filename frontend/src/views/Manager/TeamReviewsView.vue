@@ -234,7 +234,7 @@
 
     <!-- Review Detail/Edit Dialog -->
     <v-dialog v-model="reviewDialog" max-width="900" persistent>
-      <v-card v-if="selectedReview">
+      <v-card v-if="selectedReview" class="review-detail-card">
         <v-card-title class="bg-primary">
           <span class="text-white">{{ isEditing ? 'Conduct' : 'View' }} Review</span>
           <v-spacer></v-spacer>
@@ -473,8 +473,14 @@ const loadReviews = async () => {
       params.cycle = filterCycle.value
     }
 
-    const response = await api.get('/reviews/manager/', { params })
-    reviews.value = response.data
+    // Add view parameter to get reviews where user is the reviewer
+    params.view = 'reviewer'
+    
+    const response = await api.get('/reviews/', { params })
+    // Handle different response formats (array, paginated results, etc.)
+    reviews.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.results || [])
   } catch (error) {
     console.error('Error loading reviews:', error)
     toast.error('Failed to load reviews')
@@ -486,7 +492,10 @@ const loadReviews = async () => {
 const loadCycles = async () => {
   try {
     const response = await api.get('/cycles/')
-    cycles.value = response.data
+    // Handle different response formats (array, paginated results, etc.)
+    cycles.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.results || [])
   } catch (error) {
     console.error('Error loading cycles:', error)
   }
@@ -636,5 +645,14 @@ onMounted(() => {
 }
 .border-b {
   border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.review-detail-card {
+  background-color: white !important;
+  opacity: 1 !important;
+}
+
+.review-detail-card .v-card-text {
+  background-color: white;
 }
 </style>

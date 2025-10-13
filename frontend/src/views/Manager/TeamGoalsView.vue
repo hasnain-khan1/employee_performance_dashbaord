@@ -156,6 +156,43 @@ const teamMembers = ref([])
 const pendingApprovals = ref([])
 const loading = ref(false)
 
+// Computed properties
+const teamStats = computed(() => {
+  const totalMembers = teamMembers.value.length
+  const totalGoals = teamMembers.value.reduce((sum, m) => sum + m.goals_count, 0)
+  const avgCompletionRate = totalMembers > 0
+    ? Math.round(teamMembers.value.reduce((sum, m) => sum + m.completion_rate, 0) / totalMembers)
+    : 0
+  const pendingCount = pendingApprovals.value.length
+
+  return [
+    {
+      title: 'Team Members',
+      value: totalMembers,
+      icon: 'mdi-account-group',
+      color: 'primary'
+    },
+    {
+      title: 'Total Goals',
+      value: totalGoals,
+      icon: 'mdi-target',
+      color: 'success'
+    },
+    {
+      title: 'Avg Completion',
+      value: `${avgCompletionRate}%`,
+      icon: 'mdi-chart-line',
+      color: 'info'
+    },
+    {
+      title: 'Pending Approvals',
+      value: pendingCount,
+      icon: 'mdi-clock-outline',
+      color: 'warning'
+    }
+  ]
+})
+
 const memberHeaders = [
   { title: 'Name', key: 'name', sortable: false },
   { title: 'Role', key: 'role', sortable: true },
@@ -176,7 +213,10 @@ const loadTeamData = async () => {
     })
     
     // Process team members and their goals
-    const members = response.data
+    // Handle different response formats (array, paginated results, etc.)
+    const members = Array.isArray(response.data) 
+      ? response.data 
+      : (response.data?.results || [])
     
     for (let member of members) {
       try {
@@ -184,7 +224,10 @@ const loadTeamData = async () => {
           params: { employee: member.id }
         })
         
-        const goals = goalsResponse.data
+        // Handle different response formats
+        const goals = Array.isArray(goalsResponse.data)
+          ? goalsResponse.data
+          : (goalsResponse.data?.results || [])
         member.goals_count = goals.length
         
         const completedGoals = goals.filter(g => g.status === 'completed').length
@@ -224,7 +267,12 @@ const loadTeamData = async () => {
       params: { status: 'submitted', manager: 'me' }
     })
     
-    pendingApprovals.value = approvalsResponse.data.map(goal => ({
+    // Handle different response formats
+    const approvals = Array.isArray(approvalsResponse.data)
+      ? approvalsResponse.data
+      : (approvalsResponse.data?.results || [])
+    
+    pendingApprovals.value = approvals.map(goal => ({
       id: goal.id,
       goal_title: goal.title,
       employee_name: goal.employee?.full_name || 'Unknown',

@@ -184,7 +184,7 @@
 
     <!-- Employee Detail Dialog -->
     <v-dialog v-model="detailDialog" max-width="800">
-      <v-card v-if="selectedEmployee">
+      <v-card v-if="selectedEmployee" class="employee-detail-card">
         <v-card-title class="bg-primary">
           <span class="text-white">Employee Details</span>
           <v-spacer></v-spacer>
@@ -341,7 +341,10 @@ const loadEmployees = async () => {
     }
 
     const response = await authAPI.getUsers(params)
-    employees.value = response.data
+    // Handle different response formats (array, paginated results, etc.)
+    employees.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data?.results || [])
   } catch (error) {
     console.error('Error loading employees:', error)
     toast.error('Failed to load employees')
@@ -436,5 +439,14 @@ onMounted(() => {
 <style scoped>
 .v-card {
   margin-bottom: 16px;
+}
+
+.employee-detail-card {
+  background-color: white !important;
+  opacity: 1 !important;
+}
+
+.employee-detail-card .v-card-text {
+  background-color: white;
 }
 </style>
