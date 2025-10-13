@@ -19,4 +19,5 @@ export const authAPI = {
   // User management
   getUsers: (params = {}) => api.get('/auth/users/', { params }),
   getUser: (id) => api.get(`/auth/users/${id}/`),
+  updateUser: (id, data) => api.patch(`/auth/users/${id}/`, data),
 }

@@ -263,6 +263,104 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Edit Employee Dialog -->
+    <v-dialog v-model="editDialog" max-width="600" persistent>
+      <v-card class="employee-edit-card">
+        <v-card-title class="bg-primary">
+          <span class="text-white">Edit Employee</span>
+          <v-spacer></v-spacer>
+          <v-btn
+            icon
+            variant="text"
+            @click="closeEditDialog"
+          >
+            <v-icon color="white">mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-card-text class="mt-4">
+          <v-form ref="editFormRef">
+            <v-text-field
+              v-model="editForm.employee_id"
+              label="Employee ID"
+              variant="outlined"
+              :rules="[v => !!v || 'Employee ID is required']"
+              prepend-inner-icon="mdi-identifier"
+            />
+
+            <v-row>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="editForm.first_name"
+                  label="First Name"
+                  variant="outlined"
+                  :rules="[v => !!v || 'First name is required']"
+                  prepend-inner-icon="mdi-account"
+                />
+              </v-col>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="editForm.last_name"
+                  label="Last Name"
+                  variant="outlined"
+                  :rules="[v => !!v || 'Last name is required']"
+                />
+              </v-col>
+            </v-row>
+
+            <v-text-field
+              v-model="editForm.email"
+              label="Email"
+              type="email"
+              variant="outlined"
+              :rules="[
+                v => !!v || 'Email is required',
+                v => /.+@.+\..+/.test(v) || 'Email must be valid'
+              ]"
+              prepend-inner-icon="mdi-email"
+            />
+
+            <v-text-field
+              v-model="editForm.job_title"
+              label="Job Title"
+              variant="outlined"
+              prepend-inner-icon="mdi-briefcase"
+            />
+
+            <v-select
+              v-model="editForm.role"
+              :items="roleOptions"
+              label="Role"
+              variant="outlined"
+              :rules="[v => !!v || 'Role is required']"
+              prepend-inner-icon="mdi-account-key"
+            />
+
+            <v-select
+              v-model="editForm.status"
+              :items="statusOptions"
+              label="Status"
+              variant="outlined"
+              :rules="[v => !!v || 'Status is required']"
+              prepend-inner-icon="mdi-account-check"
+            />
+          </v-form>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn
+            color="primary"
+            :loading="saving"
+            @click="saveEmployee"
+          >
+            Save Changes
+          </v-btn>
+          <v-btn variant="text" @click="closeEditDialog">
+            Cancel
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -280,7 +378,19 @@ const searchQuery = ref('')
 const filterRole = ref(null)
 const filterStatus = ref(null)
 const detailDialog = ref(false)
+const editDialog = ref(false)
 const selectedEmployee = ref(null)
+const saving = ref(false)
+
+const editForm = ref({
+  email: '',
+  first_name: '',
+  last_name: '',
+  role: '',
+  status: '',
+  job_title: '',
+  employee_id: ''
+})
 
 // Options
 const roleOptions = [
@@ -368,8 +478,47 @@ const viewEmployee = (employee) => {
 }
 
 const editEmployee = (employee) => {
-  // Navigate to edit page or open edit dialog
-  toast.info('Edit functionality will be implemented')
+  selectedEmployee.value = employee
+  editForm.value = {
+    email: employee.email || '',
+    first_name: employee.first_name || '',
+    last_name: employee.last_name || '',
+    role: employee.role || 'employee',
+    status: employee.status || 'active',
+    job_title: employee.job_title || '',
+    employee_id: employee.employee_id || ''
+  }
+  detailDialog.value = false
+  editDialog.value = true
+}
+
+const saveEmployee = async () => {
+  try {
+    saving.value = true
+    await authAPI.updateUser(selectedEmployee.value.id, editForm.value)
+    toast.success('Employee updated successfully')
+    editDialog.value = false
+    await loadEmployees()
+  } catch (error) {
+    console.error('Error updating employee:', error)
+    toast.error('Failed to update employee')
+  } finally {
+    saving.value = false
+  }
+}
+
+const closeEditDialog = () => {
+  editDialog.value = false
+  selectedEmployee.value = null
+  editForm.value = {
+    email: '',
+    first_name: '',
+    last_name: '',
+    role: '',
+    status: '',
+    job_title: '',
+    employee_id: ''
+  }
 }
 
 const toggleEmployeeStatus = async (employee) => {
@@ -441,12 +590,25 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.bg-primary {
+  background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+}
+
 .employee-detail-card {
   background-color: white !important;
   opacity: 1 !important;
 }
 
 .employee-detail-card .v-card-text {
+  background-color: white;
+}
+
+.employee-edit-card {
+  background-color: white !important;
+  opacity: 1 !important;
+}
+
+.employee-edit-card .v-card-text {
   background-color: white;
 }
 </style>

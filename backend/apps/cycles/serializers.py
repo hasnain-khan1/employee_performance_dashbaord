@@ -9,6 +9,8 @@ class CycleParticipantSerializer(serializers.ModelSerializer):
 
 
 class ReviewCycleSerializer(serializers.ModelSerializer):
+    created_by = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    
     class Meta:
         model = ReviewCycle
         fields = '__all__'

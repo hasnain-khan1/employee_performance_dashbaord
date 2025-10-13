@@ -195,7 +195,7 @@
     </v-row>
 
     <!-- Create/Edit Dialog -->
-    <v-dialog v-model="dialog" max-width="600" persistent>
+    <v-dialog v-model="dialog" max-width="800" persistent scrollable>
       <v-card class="cycle-dialog-card">
         <v-card-title class="bg-primary">
           <span class="text-white">{{ isEditing ? 'Edit' : 'Create' }} Review Cycle</span>
@@ -229,7 +229,7 @@
               <v-col cols="6">
                 <v-text-field
                   v-model="formData.start_date"
-                  label="Start Date"
+                  label="Cycle Start Date"
                   type="date"
                   variant="outlined"
                   :rules="[v => !!v || 'Start date is required']"
@@ -238,7 +238,7 @@
               <v-col cols="6">
                 <v-text-field
                   v-model="formData.end_date"
-                  label="End Date"
+                  label="Cycle End Date"
                   type="date"
                   variant="outlined"
                   :rules="[v => !!v || 'End date is required']"
@@ -246,6 +246,76 @@
               </v-col>
             </v-row>
 
+            <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-3">Goal Setting Period</div>
+            <v-row>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="formData.goal_setting_start"
+                  label="Goal Setting Start"
+                  type="date"
+                  variant="outlined"
+                  :rules="[v => !!v || 'Goal setting start date is required']"
+                />
+              </v-col>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="formData.goal_setting_end"
+                  label="Goal Setting End"
+                  type="date"
+                  variant="outlined"
+                  :rules="[v => !!v || 'Goal setting end date is required']"
+                />
+              </v-col>
+            </v-row>
+
+            <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-3">Self Review Period</div>
+            <v-row>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="formData.self_review_start"
+                  label="Self Review Start"
+                  type="date"
+                  variant="outlined"
+                  :rules="[v => !!v || 'Self review start date is required']"
+                />
+              </v-col>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="formData.self_review_end"
+                  label="Self Review End"
+                  type="date"
+                  variant="outlined"
+                  :rules="[v => !!v || 'Self review end date is required']"
+                />
+              </v-col>
+            </v-row>
+
+            <v-divider class="my-4"></v-divider>
+            <div class="text-subtitle-2 mb-3">Manager Review Period</div>
+            <v-row>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="formData.manager_review_start"
+                  label="Manager Review Start"
+                  type="date"
+                  variant="outlined"
+                  :rules="[v => !!v || 'Manager review start date is required']"
+                />
+              </v-col>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="formData.manager_review_end"
+                  label="Manager Review End"
+                  type="date"
+                  variant="outlined"
+                  :rules="[v => !!v || 'Manager review end date is required']"
+                />
+              </v-col>
+            </v-row>
+
+            <v-divider class="my-4"></v-divider>
             <v-select
               v-model="formData.status"
               :items="statusOptions"
@@ -292,6 +362,12 @@ const formData = ref({
   description: '',
   start_date: '',
   end_date: '',
+  goal_setting_start: '',
+  goal_setting_end: '',
+  self_review_start: '',
+  self_review_end: '',
+  manager_review_start: '',
+  manager_review_end: '',
   status: 'draft'
 })
 
@@ -363,6 +439,12 @@ const openCreateDialog = () => {
     description: '',
     start_date: '',
     end_date: '',
+    goal_setting_start: '',
+    goal_setting_end: '',
+    self_review_start: '',
+    self_review_end: '',
+    manager_review_start: '',
+    manager_review_end: '',
     status: 'draft'
   }
   dialog.value = true
@@ -376,6 +458,12 @@ const editCycle = (cycle) => {
     description: cycle.description,
     start_date: cycle.start_date,
     end_date: cycle.end_date,
+    goal_setting_start: cycle.goal_setting_start || '',
+    goal_setting_end: cycle.goal_setting_end || '',
+    self_review_start: cycle.self_review_start || '',
+    self_review_end: cycle.self_review_end || '',
+    manager_review_start: cycle.manager_review_start || '',
+    manager_review_end: cycle.manager_review_end || '',
     status: cycle.status
   }
   dialog.value = true

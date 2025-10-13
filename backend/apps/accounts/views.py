@@ -262,11 +262,11 @@ class UserListView(generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
 
-class UserDetailView(generics.RetrieveAPIView):
+class UserDetailView(generics.RetrieveUpdateAPIView):
     """
     User detail endpoint.
     
-    Provides detailed information about a specific user.
+    Provides detailed information about a specific user and allows updates.
     """
     
     serializer_class = UserSerializer
@@ -289,6 +289,34 @@ class UserDetailView(generics.RetrieveAPIView):
     def get(self, request, *args, **kwargs):
         """Get user details."""
         return super().get(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary="Update User",
+        description="Update a specific user's information.",
+        responses={
+            200: UserSerializer,
+            400: "Validation error",
+            404: "User not found",
+            401: "Authentication required"
+        }
+    )
+    def patch(self, request, *args, **kwargs):
+        """Update user details."""
+        return super().patch(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary="Update User",
+        description="Update a specific user's information.",
+        responses={
+            200: UserSerializer,
+            400: "Validation error",
+            404: "User not found",
+            401: "Authentication required"
+        }
+    )
+    def put(self, request, *args, **kwargs):
+        """Update user details."""
+        return super().put(request, *args, **kwargs)
 
 
 class ChangePasswordView(APIView):
