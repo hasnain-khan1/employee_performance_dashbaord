@@ -21,6 +21,7 @@ import HREmployeesView from '@/views/HR/EmployeesView.vue'
 import HRCyclesView from '@/views/HR/CyclesView.vue'
 import HRAnalyticsView from '@/views/HR/AnalyticsView.vue'
 import HRReportsView from '@/views/HR/ReportsView.vue'
+import HRCSVImportView from '@/views/HR/CSVImportView.vue'
 
 // Profile view
 import ProfileView from '@/views/ProfileView.vue'
@@ -115,6 +116,12 @@ const routes = [
     path: '/hr/reports',
     name: 'HRReports',
     component: HRReportsView,
+    meta: { requiresAuth: true, role: 'hr' }
+  },
+  {
+    path: '/hr/csv-import',
+    name: 'HRCSVImport',
+    component: HRCSVImportView,
     meta: { requiresAuth: true, role: 'hr' }
   },
   // Catch all route

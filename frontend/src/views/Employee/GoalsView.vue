@@ -249,8 +249,29 @@
                   max="100"
                   :rules="[v => !!v || 'Weight is required', v => v >= 1 && v <= 100 || 'Weight must be between 1 and 100']"
                   :readonly="viewingGoal"
+                  hint="Enter the percentage weight for this goal (1-100%)"
+                  persistent-hint
                   required
                 />
+              </v-col>
+            </v-row>
+
+            <!-- Weight Total Info -->
+            <v-row v-if="!editingGoal">
+              <v-col cols="12">
+                <v-alert
+                  :type="weightTotalStatus.type"
+                  variant="tonal"
+                  density="compact"
+                  class="mb-2"
+                >
+                  <div class="d-flex justify-space-between align-center">
+                    <span>{{ weightTotalStatus.message }}</span>
+                    <v-chip :color="weightTotalStatus.chipColor" size="small">
+                      {{ weightTotalStatus.total }}%
+                    </v-chip>
+                  </div>
+                </v-alert>
               </v-col>
             </v-row>
 
@@ -572,8 +593,34 @@ const saveGoalWithStatus = async (status, successMessage) => {
     await loadGoals()
   } catch (error) {
     console.error('Error saving goal:', error)
-    const errorMsg = error.response?.data?.message || error.message || 'Failed to save goal'
-    toast.error(errorMsg)
+    
+    // Extract detailed validation errors
+    let errorMsg = 'Failed to save goal'
+    if (error.response?.data) {
+      const data = error.response.data
+      
+      // Handle field-specific errors
+      if (data.weight) {
+        errorMsg = Array.isArray(data.weight) ? data.weight[0] : data.weight
+      } else if (data.non_field_errors) {
+        errorMsg = Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors
+      } else if (data.message) {
+        errorMsg = data.message
+      } else if (data.detail) {
+        errorMsg = data.detail
+      } else {
+        // Combine all field errors
+        const errors = Object.entries(data).map(([field, msgs]) => {
+          const message = Array.isArray(msgs) ? msgs[0] : msgs
+          return `${field}: ${message}`
+        }).join('; ')
+        if (errors) errorMsg = errors
+      }
+    } else if (error.message) {
+      errorMsg = error.message
+    }
+    
+    toast.error(errorMsg, { timeout: 8000 })
   } finally {
     saving.value = false
   }
@@ -622,13 +669,34 @@ const saveGoal = async () => {
     await loadGoals()
   } catch (error) {
     console.error('Error saving goal:', error)
-    const errorMsg = error.response?.data?.message || error.message || 'Failed to save goal'
-    toast.error(errorMsg)
     
-    // Log detailed error for debugging
-    if (error.response) {
-      console.error('Error response:', error.response.data)
+    // Extract detailed validation errors
+    let errorMsg = 'Failed to save goal'
+    if (error.response?.data) {
+      const data = error.response.data
+      
+      // Handle field-specific errors
+      if (data.weight) {
+        errorMsg = Array.isArray(data.weight) ? data.weight[0] : data.weight
+      } else if (data.non_field_errors) {
+        errorMsg = Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors
+      } else if (data.message) {
+        errorMsg = data.message
+      } else if (data.detail) {
+        errorMsg = data.detail
+      } else {
+        // Combine all field errors
+        const errors = Object.entries(data).map(([field, msgs]) => {
+          const message = Array.isArray(msgs) ? msgs[0] : msgs
+          return `${field}: ${message}`
+        }).join('; ')
+        if (errors) errorMsg = errors
+      }
+    } else if (error.message) {
+      errorMsg = error.message
     }
+    
+    toast.error(errorMsg, { timeout: 8000 })
   } finally {
     saving.value = false
   }
@@ -709,6 +777,37 @@ const getPriorityColor = (priority) => {
 const formatDate = (date) => {
   return format(new Date(date), 'MMM dd, yyyy')
 }
+
+// Computed properties
+const weightTotalStatus = computed(() => {
+  // Calculate total weight of existing goals (excluding the one being edited if any)
+  const existingTotal = goals.value
+    .filter(g => g.status !== 'cancelled' && (!editingGoal.value || g.id !== editingGoal.value.id))
+    .reduce((sum, g) => sum + (g.weight || 0), 0)
+  
+  const currentWeight = parseInt(goalForm.value.weight) || 0
+  const total = existingTotal + currentWeight
+  
+  let type = 'info'
+  let message = `Total weight across all goals: ${existingTotal}% (existing) + ${currentWeight}% (this goal) = ${total}%`
+  let chipColor = 'primary'
+  
+  if (total === 100) {
+    type = 'success'
+    message = '✓ Perfect! Total weight equals 100%. You can submit for approval.'
+    chipColor = 'success'
+  } else if (total < 100) {
+    type = 'warning'
+    message = `You need ${100 - total}% more to reach 100%. You can save as draft, but need 100% total to submit.`
+    chipColor = 'warning'
+  } else if (total > 100) {
+    type = 'error'
+    message = `Total weight exceeds 100% by ${total - 100}%. Please reduce the weight.`
+    chipColor = 'error'
+  }
+  
+  return { type, message, total, chipColor }
+})
 
 // Lifecycle
 onMounted(() => {

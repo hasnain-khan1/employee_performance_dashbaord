@@ -173,6 +173,11 @@ const navigationItems = computed(() => {
         to: '/hr/employees'
       },
       {
+        title: 'CSV Import',
+        icon: 'mdi-file-upload',
+        to: '/hr/csv-import'
+      },
+      {
         title: 'Review Cycles',
         icon: 'mdi-calendar-clock',
         to: '/hr/cycles'

@@ -8,6 +8,7 @@ registration, and profile management endpoints.
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
+from . import csv_views
 
 app_name = 'accounts'
 
@@ -31,4 +32,9 @@ urlpatterns = [
     # Password management
     path('change-password/', views.ChangePasswordView.as_view(), name='change_password'),
     path('reset-password/', views.PasswordResetView.as_view(), name='reset_password'),
+    
+    # CSV Import endpoints
+    path('csv/upload/', csv_views.CSVUploadValidateView.as_view(), name='csv_upload'),
+    path('csv/import/', csv_views.CSVImportConfirmView.as_view(), name='csv_import'),
+    path('csv/template/', csv_views.CSVTemplateDownloadView.as_view(), name='csv_template'),
 ]

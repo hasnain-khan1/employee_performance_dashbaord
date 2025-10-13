@@ -20,4 +20,13 @@ export const authAPI = {
   getUsers: (params = {}) => api.get('/auth/users/', { params }),
   getUser: (id) => api.get(`/auth/users/${id}/`),
   updateUser: (id, data) => api.patch(`/auth/users/${id}/`, data),
+  
+  // CSV Import
+  uploadCSV: (formData) => api.post('/auth/csv/upload/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  confirmImport: (data) => api.post('/auth/csv/import/', data),
+  downloadTemplate: () => api.get('/auth/csv/template/', {
+    responseType: 'blob'
+  })
 }
