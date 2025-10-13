@@ -45,14 +45,20 @@ class GoalSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'employee', 'employee_id',
             'cycle', 'cycle_id', 'specific', 'measurable', 'achievable',
             'relevant', 'time_bound', 'goal_type', 'priority', 'status',
-            'metric', 'target_value', 'current_value', 'start_date',
-            'target_date', 'completion_date', 'weight', 'progress_percentage',
-            'category', 'manager', 'is_stretch_goal', 'updates',
+            'metric', 'target_value', 'current_value', 'unit', 
+            'start_date', 'target_date', 'completed_date', 'weight', 
+            'approved_by', 'approved_at', 'progress_percentage', 
+            'last_updated', 'notes', 'updates',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'created_at', 'updated_at', 'progress_percentage'
+            'id', 'created_at', 'updated_at', 'progress_percentage', 
+            'completed_date', 'approved_at', 'last_updated'
         ]
+        extra_kwargs = {
+            'cycle': {'required': False},
+            'employee': {'required': False}
+        }
     
     def create(self, validated_data):
         """
@@ -60,15 +66,9 @@ class GoalSerializer(serializers.ModelSerializer):
         
         Automatically sets the employee to the current user if not provided.
         """
-        request = self.context.get('request')
-        
-        # Set employee to current user if not provided
-        if not validated_data.get('employee_id') and request and request.user:
-            validated_data['employee_id'] = request.user.id
-        
-        # Set manager to current user's manager if not provided
-        if not validated_data.get('manager') and request and request.user:
-            validated_data['manager'] = request.user.manager
+        # Remove _id fields that will be set by the view
+        validated_data.pop('employee_id', None)
+        validated_data.pop('cycle_id', None)
         
         return super().create(validated_data)
 
