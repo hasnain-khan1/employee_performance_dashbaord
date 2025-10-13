@@ -139,7 +139,7 @@
         </v-card-title>
 
         <v-card-text class="pa-6">
-          <v-form ref="goalForm" v-model="formValid">
+          <v-form ref="goalFormRef" v-model="formValid">
             <v-row>
               <v-col cols="12">
                 <v-text-field
@@ -336,6 +336,7 @@ const saving = ref(false)
 const goalDialog = ref(false)
 const editingGoal = ref(null)
 const formValid = ref(false)
+const goalFormRef = ref(null) // Template ref for v-form
 
 const filters = ref({
   status: null,
@@ -448,7 +449,14 @@ const closeGoalDialog = () => {
 }
 
 const saveGoal = async () => {
-  if (!formValid.value) {
+  // Validate the form
+  if (goalFormRef.value) {
+    const { valid } = await goalFormRef.value.validate()
+    if (!valid) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+  } else if (!formValid.value) {
     toast.error('Please fill in all required fields')
     return
   }
@@ -456,15 +464,22 @@ const saveGoal = async () => {
   try {
     saving.value = true
     
-    // Prepare the data
-    const goalData = { ...goalForm.value }
-    
-    // Convert string numbers to actual numbers
-    if (goalData.target_value) {
-      goalData.target_value = parseFloat(goalData.target_value)
-    }
-    if (goalData.weight) {
-      goalData.weight = parseInt(goalData.weight)
+    // Create a clean copy of the form data (avoid circular references)
+    const goalData = {
+      title: goalForm.value.title,
+      description: goalForm.value.description,
+      goal_type: goalForm.value.goal_type,
+      priority: goalForm.value.priority,
+      metric: goalForm.value.metric,
+      target_value: goalForm.value.target_value ? parseFloat(goalForm.value.target_value) : null,
+      start_date: goalForm.value.start_date,
+      target_date: goalForm.value.target_date,
+      weight: goalForm.value.weight ? parseInt(goalForm.value.weight) : 10,
+      specific: goalForm.value.specific,
+      measurable: goalForm.value.measurable,
+      achievable: goalForm.value.achievable,
+      relevant: goalForm.value.relevant,
+      time_bound: goalForm.value.time_bound
     }
     
     console.log('Saving goal with data:', goalData)

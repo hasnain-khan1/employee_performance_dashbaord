@@ -378,21 +378,39 @@ class PasswordResetView(APIView):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.AllowAny])  # Allow logout even with invalid token
 @extend_schema(
     summary="Logout User",
     description="Logout the current user by blacklisting the refresh token.",
     responses={
         200: "Logout successful",
-        401: "Authentication required"
+        400: "Bad request"
     }
 )
 def logout_view(request):
-    """Logout user by blacklisting the refresh token."""
+    """
+    Logout user by blacklisting the refresh token.
+    
+    This endpoint accepts a refresh token and adds it to the blacklist,
+    preventing it from being used to generate new access tokens.
+    """
     try:
-        refresh_token = request.data["refresh"]
-        token = RefreshToken(refresh_token)
-        token.blacklist()
-        return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+        refresh_token = request.data.get("refresh")
+        
+        if not refresh_token:
+            return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+        
+        # Try to blacklist the token
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+        except Exception as e:
+            # Token might be invalid or already blacklisted, but that's ok for logout
+            # We still want to return success so the frontend can clear local storage
+            print(f"Token blacklist error: {e}")
+            return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+        
     except Exception as e:
-        return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+        # Even if there's an error, we still want to allow logout on the frontend
+        return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
