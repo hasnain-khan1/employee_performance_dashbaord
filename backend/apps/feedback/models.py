@@ -3,16 +3,23 @@ Feedback models for the EPMS system.
 
 This module contains models for peer feedback management,
 including feedback requests, responses, and evaluation.
+Implements BR-022, BR-023, BR-024, BR-025, BR-026.
 """
 
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+import re
 
 
 class FeedbackRequest(models.Model):
     """
     Feedback request model for peer feedback.
+    BR-022: Peer feedback requests limited to 1-5 reviewers per employee.
+    BR-024: Automated reminder system with manager escalation.
+    BR-025: Feedback window closes automatically at configured deadline.
     
     Represents a request for feedback from one employee
     to another during a review cycle.
@@ -24,7 +31,18 @@ class FeedbackRequest(models.Model):
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
         ('declined', 'Declined'),
-        ('expired', 'Expired'),
+        ('expired', 'Expired'),  # BR-025: Auto-expired at deadline
+    ]
+    
+    # Relationship type choices
+    RELATIONSHIP_CHOICES = [
+        ('direct_report', 'Direct Report'),
+        ('peer_same_team', 'Peer - Same Team'),
+        ('peer_other_team', 'Peer - Other Team'),
+        ('cross_functional', 'Cross-Functional Collaborator'),
+        ('project_team', 'Project Team Member'),
+        ('mentor_mentee', 'Mentor/Mentee'),
+        ('other', 'Other'),
     ]
     
     requester = models.ForeignKey(
@@ -55,18 +73,53 @@ class FeedbackRequest(models.Model):
         help_text='Current status of the feedback request'
     )
     
+    relationship_type = models.CharField(
+        max_length=30,
+        choices=RELATIONSHIP_CHOICES,
+        default='peer_other_team',
+        help_text='Working relationship context'
+    )
+    
+    relationship_description = models.TextField(
+        blank=True,
+        help_text='Optional description of working relationship'
+    )
+    
     message = models.TextField(
-        help_text='Message from the requester'
+        help_text='Personalized message from the requester'
     )
     
     due_date = models.DateTimeField(
-        help_text='Due date for the feedback'
+        help_text='Due date for the feedback (BR-025)'
     )
     
     submitted_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text='When the feedback was submitted'
+    )
+    
+    # BR-024: Reminder tracking
+    reminder_count = models.PositiveIntegerField(
+        default=0,
+        help_text='Number of reminders sent'
+    )
+    
+    last_reminder_sent = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the last reminder was sent'
+    )
+    
+    manager_notified = models.BooleanField(
+        default=False,
+        help_text='Whether manager has been notified of non-response (BR-024)'
+    )
+    
+    manager_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When manager was notified'
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -82,11 +135,219 @@ class FeedbackRequest(models.Model):
     def __str__(self):
         """String representation of the feedback request."""
         return f"Feedback from {self.recipient.employee_id} to {self.requester.employee_id}"
+    
+    def clean(self):
+        """
+        Validate feedback request.
+        BR-022: Peer feedback requests limited to 1-5 reviewers per employee.
+        """
+        super().clean()
+        
+        # BR-022: Validate peer count (1-5 reviewers)
+        if not self.pk:  # Only for new requests
+            existing_requests = FeedbackRequest.objects.filter(
+                requester=self.requester,
+                cycle=self.cycle
+            ).exclude(status__in=['declined', 'expired']).count()
+            
+            # Get max peer feedback from cycle configuration
+            max_peers = getattr(self.cycle, 'max_peer_feedback', 5)
+            
+            if existing_requests >= max_peers:
+                raise ValidationError({
+                    'non_field_errors': f'You can only request feedback from up to {max_peers} peers per cycle. '
+                                       f'You currently have {existing_requests} active requests. '
+                                       f'Please wait for responses or cancel existing requests.'
+                })
+            
+            if existing_requests < 1 and max_peers < 1:
+                raise ValidationError({
+                    'non_field_errors': 'At least 1 peer reviewer is required for this cycle.'
+                })
+        
+        # Validate due date is in the future
+        if self.due_date and self.due_date < timezone.now():
+            raise ValidationError({
+                'due_date': 'Due date must be in the future.'
+            })
+        
+        # Prevent self-feedback
+        if self.requester == self.recipient:
+            raise ValidationError({
+                'recipient': 'You cannot request feedback from yourself.'
+            })
+    
+    @property
+    def is_overdue(self):
+        """Check if feedback request is overdue (BR-025)."""
+        return self.status == 'pending' and timezone.now() > self.due_date
+    
+    @property
+    def days_until_due(self):
+        """Get days remaining until due date."""
+        if self.status == 'completed':
+            return 0
+        delta = self.due_date - timezone.now()
+        return max(0, delta.days)
+    
+    def should_send_reminder(self):
+        """
+        Check if reminder should be sent (BR-024).
+        Reminders at Day 7, 14, 21 after request.
+        """
+        if self.status != 'pending':
+            return False
+        
+        days_since_request = (timezone.now() - self.created_at).days
+        reminder_days = [7, 14, 21]
+        
+        # Check if we should send next reminder
+        if self.reminder_count < len(reminder_days):
+            target_day = reminder_days[self.reminder_count]
+            if days_since_request >= target_day:
+                # Check if we haven't sent a reminder today
+                if not self.last_reminder_sent or \
+                   (timezone.now() - self.last_reminder_sent).days >= 1:
+                    return True
+        
+        return False
+    
+    def should_notify_manager(self):
+        """
+        Check if manager should be notified (BR-024).
+        Manager escalation at Day 25.
+        """
+        if self.status != 'pending' or self.manager_notified:
+            return False
+        
+        days_since_request = (timezone.now() - self.created_at).days
+        return days_since_request >= 25
+    
+    def mark_expired(self):
+        """Mark request as expired if past due date (BR-025)."""
+        if self.status == 'pending' and timezone.now() > self.due_date:
+            self.status = 'expired'
+            self.save()
+            return True
+        return False
+
+
+class ContentPolicyValidator:
+    """
+    Content policy validator for feedback text.
+    BR-023: Content policy enforcement blocks submission of inappropriate language.
+    """
+    
+    # Profanity word list (customizable by HR)
+    PROFANITY_WORDS = [
+        'damn', 'hell', 'crap', 'stupid', 'idiot', 'fool', 'incompetent',
+        'lazy', 'useless', 'worthless', 'terrible', 'awful', 'horrible',
+        # Add more words as needed
+    ]
+    
+    # Bias-indicating phrases
+    BIAS_PHRASES = [
+        'too old', 'too young', 'for a woman', 'for a man', 'for his age',
+        'for her age', 'not technical enough', 'too emotional', 'too aggressive'
+    ]
+    
+    # Minimum word counts for substantive feedback
+    MIN_WORD_COUNTS = {
+        'strengths': 20,  # ~100 characters
+        'areas_for_improvement': 20,
+        'specific_examples': 15,
+    }
+    
+    @classmethod
+    def validate_text(cls, text, field_name='feedback'):
+        """
+        Validate text against content policy.
+        Returns tuple: (is_valid, error_messages)
+        """
+        errors = []
+        text_lower = text.lower()
+        
+        # Check for profanity
+        found_profanity = []
+        for word in cls.PROFANITY_WORDS:
+            if re.search(r'\b' + word + r'\b', text_lower):
+                found_profanity.append(word)
+        
+        if found_profanity:
+            errors.append(
+                f"Please use professional language. Found inappropriate words: {', '.join(found_profanity)}. "
+                "Consider rephrasing to maintain a constructive tone."
+            )
+        
+        # Check for bias
+        found_bias = []
+        for phrase in cls.BIAS_PHRASES:
+            if phrase in text_lower:
+                found_bias.append(phrase)
+        
+        if found_bias:
+            errors.append(
+                f"Potential bias detected. Please review phrases: {', '.join(found_bias)}. "
+                "Focus on behaviors and specific examples rather than personal characteristics."
+            )
+        
+        # Check minimum length
+        if field_name in cls.MIN_WORD_COUNTS:
+            word_count = len(text.split())
+            min_words = cls.MIN_WORD_COUNTS[field_name]
+            if word_count < min_words:
+                errors.append(
+                    f"Please provide more detailed feedback. "
+                    f"Minimum {min_words} words required (currently {word_count} words)."
+                )
+        
+        # Check for overly negative tone (all caps, excessive exclamation)
+        caps_ratio = sum(1 for c in text if c.isupper()) / max(len(text), 1)
+        if caps_ratio > 0.5:
+            errors.append(
+                "Please avoid using excessive capital letters. "
+                "Feedback should be constructive and professional."
+            )
+        
+        exclamation_count = text.count('!')
+        if exclamation_count > 3:
+            errors.append(
+                "Please use a more measured tone. "
+                "Reduce the use of exclamation marks for professional feedback."
+            )
+        
+        return len(errors) == 0, errors
+    
+    @classmethod
+    def validate_all_fields(cls, strengths, areas_for_improvement, specific_examples, recommendations=''):
+        """Validate all feedback fields at once."""
+        all_errors = {}
+        
+        valid, errors = cls.validate_text(strengths, 'strengths')
+        if not valid:
+            all_errors['strengths'] = errors
+        
+        valid, errors = cls.validate_text(areas_for_improvement, 'areas_for_improvement')
+        if not valid:
+            all_errors['areas_for_improvement'] = errors
+        
+        valid, errors = cls.validate_text(specific_examples, 'specific_examples')
+        if not valid:
+            all_errors['specific_examples'] = errors
+        
+        if recommendations:
+            valid, errors = cls.validate_text(recommendations, 'recommendations')
+            if not valid:
+                all_errors['recommendations'] = errors
+        
+        return len(all_errors) == 0, all_errors
 
 
 class FeedbackResponse(models.Model):
     """
     Feedback response model.
+    BR-023: Content policy enforcement blocks submission of inappropriate language.
+    BR-026: Anonymous feedback cannot be attributed to individual reviewers.
     
     Represents the actual feedback response from
     a peer to the requester.
@@ -105,17 +366,23 @@ class FeedbackResponse(models.Model):
         help_text='Overall rating (1-5)'
     )
     
+    # Behavioral competencies ratings (JSON field for flexibility)
+    competency_ratings = models.JSONField(
+        default=dict,
+        help_text='Ratings for behavioral competencies'
+    )
+    
     # Detailed feedback
     strengths = models.TextField(
-        help_text='Strengths and positive aspects'
+        help_text='Strengths and positive aspects (min 20 words)'
     )
     
     areas_for_improvement = models.TextField(
-        help_text='Areas for improvement'
+        help_text='Areas for improvement (min 20 words)'
     )
     
     specific_examples = models.TextField(
-        help_text='Specific examples and observations'
+        help_text='Specific examples of collaboration (min 15 words)'
     )
     
     recommendations = models.TextField(
@@ -128,10 +395,28 @@ class FeedbackResponse(models.Model):
         help_text='Any additional comments'
     )
     
-    # Anonymity
+    # BR-026: Anonymity controls
     is_anonymous = models.BooleanField(
         default=False,
-        help_text='Whether the feedback is anonymous'
+        help_text='Whether the feedback is anonymous (BR-026)'
+    )
+    
+    # Draft capability
+    is_draft = models.BooleanField(
+        default=True,
+        help_text='Whether this is a draft (allows partial save)'
+    )
+    
+    # BR-023: Content policy validation tracking
+    content_policy_passed = models.BooleanField(
+        default=False,
+        help_text='Whether content passed policy validation (BR-023)'
+    )
+    
+    validation_issues = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Content policy validation issues detected'
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -145,7 +430,50 @@ class FeedbackResponse(models.Model):
     
     def __str__(self):
         """String representation of the feedback response."""
-        return f"Response for {self.request}"
+        status = "Anonymous" if self.is_anonymous else "Named"
+        return f"{status} Response for {self.request}"
+    
+    def clean(self):
+        """
+        Validate feedback response.
+        BR-023: Content policy enforcement.
+        """
+        super().clean()
+        
+        # BR-023: Content policy validation (only for non-draft)
+        if not self.is_draft:
+            is_valid, errors = ContentPolicyValidator.validate_all_fields(
+                self.strengths,
+                self.areas_for_improvement,
+                self.specific_examples,
+                self.recommendations
+            )
+            
+            if not is_valid:
+                self.content_policy_passed = False
+                self.validation_issues = errors
+                # Raise validation error with all issues
+                error_messages = []
+                for field, field_errors in errors.items():
+                    error_messages.append(f"{field}: " + " ".join(field_errors))
+                
+                raise ValidationError({
+                    'non_field_errors': 'Content policy violations detected. Please review and correct the following:\n' + 
+                                       '\n'.join(error_messages)
+                })
+            else:
+                self.content_policy_passed = True
+                self.validation_issues = {}
+    
+    def save(self, *args, **kwargs):
+        """Override save to update request status."""
+        # If submitting (not draft), update request status
+        if not self.is_draft and self.request.status == 'pending':
+            self.request.status = 'completed'
+            self.request.submitted_at = timezone.now()
+            self.request.save()
+        
+        super().save(*args, **kwargs)
 
 
 class FeedbackTemplate(models.Model):

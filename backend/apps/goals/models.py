@@ -22,8 +22,9 @@ class Goal(models.Model):
     # Goal status choices
     STATUS_CHOICES = [
         ('draft', 'Draft'),
-        ('submitted', 'Submitted'),
-        ('approved', 'Approved'),
+        ('submitted', 'Submitted'),  # Pending manager approval
+        ('approved', 'Approved'),      # BR-017: Manager approval required
+        ('rejected', 'Rejected'),      # Manager rejected, needs revision
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
@@ -212,12 +213,84 @@ class Goal(models.Model):
         return f"{self.title} - {self.employee.employee_id}"
     
     def clean(self):
-        """Validate the goal data."""
+        """Validate the goal data with SMART criteria and business rules."""
         super().clean()
+        
+        # BR-015: SMART validation - Validate title length (5-100 characters)
+        if len(self.title) < 5 or len(self.title) > 100:
+            raise ValidationError({
+                'title': 'Goal title must be between 5 and 100 characters.'
+            })
+        
+        # BR-015: SMART validation - Validate description length (20-500 characters)
+        if len(self.description) < 20 or len(self.description) > 500:
+            raise ValidationError({
+                'description': 'Goal description must be between 20 and 500 characters. '
+                              'Provide clear, specific details about what will be accomplished.'
+            })
+        
+        # BR-015: SMART validation - Measurable metric required
+        if not self.metric or len(self.metric.strip()) == 0:
+            raise ValidationError({
+                'metric': 'A measurable metric is required. '
+                         'Examples: "Increase by 25%", "Complete 10 projects", "Reduce time to 2 hours"'
+            })
+        
+        # BR-015: Validate metric contains measurable criteria
+        metric_lower = self.metric.lower()
+        measurable_indicators = [
+            'increase', 'decrease', 'reduce', 'improve', 'achieve', 'complete',
+            'reach', 'exceed', '%', 'percent', 'number', 'count', 'time', 'hours',
+            'days', 'weeks', 'projects', 'items', 'customers', 'revenue', 'cost'
+        ]
+        
+        # Check if metric contains numbers or measurable keywords
+        has_number = any(char.isdigit() for char in self.metric)
+        has_indicator = any(indicator in metric_lower for indicator in measurable_indicators)
+        
+        if not (has_number or has_indicator):
+            raise ValidationError({
+                'metric': 'Metric must contain quantifiable criteria. '
+                         'Include specific numbers or measurable terms (e.g., "25%", "10 projects", "2 hours")'
+            })
+        
+        # BR-015: SMART validation - Specific criteria
+        vague_terms = ['improve', 'better', 'more', 'less', 'good', 'bad']
+        if any(term in self.title.lower() and term == self.title.lower().strip() for term in vague_terms):
+            raise ValidationError({
+                'title': 'Goal title is too vague. Be specific about what exactly will be accomplished. '
+                        'Avoid standalone vague terms like "improve" or "better".'
+            })
         
         # Validate date order
         if self.start_date >= self.target_date:
-            raise ValidationError('Start date must be before target date.')
+            raise ValidationError({
+                'target_date': 'Target date must be after start date.'
+            })
+        
+        # BR-016: Target dates must be within the active review cycle period
+        if self.cycle:
+            if self.target_date < self.cycle.start_date:
+                raise ValidationError({
+                    'target_date': f'Target date cannot be before cycle start date ({self.cycle.start_date}).'
+                })
+            if self.target_date > self.cycle.end_date:
+                raise ValidationError({
+                    'target_date': f'Target date cannot be after cycle end date ({self.cycle.end_date}). '
+                                  'Goals must be achievable within the review cycle period.'
+                })
+            if self.start_date < self.cycle.start_date:
+                raise ValidationError({
+                    'start_date': f'Start date cannot be before cycle start date ({self.cycle.start_date}).'
+                })
+        
+        # Validate past dates
+        from django.utils import timezone
+        today = timezone.now().date()
+        if self.target_date < today and not self.pk:
+            raise ValidationError({
+                'target_date': 'Target date cannot be in the past. Goals must have future completion dates.'
+            })
         
         # Validate progress percentage
         if self.progress_percentage < 0 or self.progress_percentage > 100:
@@ -225,9 +298,11 @@ class Goal(models.Model):
         
         # Validate weight
         if self.weight < 1 or self.weight > 100:
-            raise ValidationError('Weight must be between 1 and 100.')
+            raise ValidationError({
+                'weight': 'Weight must be between 1 and 100%.'
+            })
         
-        # Validate maximum 5 goals per employee per cycle
+        # BR-012: Validate maximum 5 goals per employee per cycle
         if not self.pk:  # Only for new goals
             employee_goals_count = Goal.objects.filter(
                 employee=self.employee,
@@ -235,29 +310,50 @@ class Goal(models.Model):
             ).exclude(status='cancelled').count()
             
             if employee_goals_count >= 5:
-                raise ValidationError(
-                    'Maximum of 5 goals allowed per employee per cycle. '
-                    'Please cancel or complete existing goals before adding new ones.'
-                )
+                raise ValidationError({
+                    'non_field_errors': f'Maximum of 5 goals allowed per employee per cycle. '
+                                       f'You currently have {employee_goals_count} goals. '
+                                       f'Please complete or cancel existing goals before adding new ones.'
+                })
         
-        # Validate total weight doesn't exceed 100%
+        # BR-013: Validate total weight equals 100% when submitting
         if self.employee and self.cycle:
-            # Get all goals for this employee in this cycle (excluding this one if updating)
-            existing_goals = Goal.objects.filter(
-                employee=self.employee,
-                cycle=self.cycle
-            ).exclude(status='cancelled')
-            
-            if self.pk:
-                existing_goals = existing_goals.exclude(pk=self.pk)
-            
-            total_weight = sum(g.weight for g in existing_goals) + self.weight
-            
-            if total_weight > 100:
-                raise ValidationError(
-                    f'Total weight cannot exceed 100%. Current total: {total_weight}%. '
-                    f'Please adjust goal weights.'
-                )
+            # Only enforce 100% total when status is submitted, approved, or in_progress
+            if self.status in ['submitted', 'approved', 'in_progress']:
+                # Get all goals for this employee in this cycle (excluding cancelled)
+                existing_goals = Goal.objects.filter(
+                    employee=self.employee,
+                    cycle=self.cycle
+                ).exclude(status='cancelled')
+                
+                if self.pk:
+                    existing_goals = existing_goals.exclude(pk=self.pk)
+                
+                total_weight = sum(g.weight for g in existing_goals) + self.weight
+                
+                if total_weight != 100:
+                    raise ValidationError({
+                        'weight': f'Total weight must equal exactly 100% when submitting goals. '
+                                 f'Current total: {total_weight}%. '
+                                 f'Please adjust goal weights so they sum to 100%.'
+                    })
+            else:
+                # For draft status, just ensure we don't exceed 100%
+                existing_goals = Goal.objects.filter(
+                    employee=self.employee,
+                    cycle=self.cycle
+                ).exclude(status='cancelled')
+                
+                if self.pk:
+                    existing_goals = existing_goals.exclude(pk=self.pk)
+                
+                total_weight = sum(g.weight for g in existing_goals) + self.weight
+                
+                if total_weight > 100:
+                    raise ValidationError({
+                        'weight': f'Total weight cannot exceed 100%. Current total: {total_weight}%. '
+                                 f'You can have less than 100% for draft goals.'
+                    })
     
     @property
     def is_overdue(self):
@@ -317,12 +413,123 @@ class Goal(models.Model):
         self.save()
     
     def approve(self, approved_by):
-        """Approve the goal."""
+        """
+        Approve the goal and create version history (BR-017).
+        Manager approval required before goals become active.
+        """
         self.status = 'approved'
         self.approved_by = approved_by
         from django.utils import timezone
         self.approved_at = timezone.now()
         self.save()
+        
+        # Create version history
+        self.create_version('approved', approved_by, 'Goal approved by manager')
+    
+    def reject(self, rejected_by, feedback_comment):
+        """
+        Reject the goal and create version history (BR-018).
+        Manager feedback is mandatory for goal rejections.
+        """
+        if not feedback_comment or len(feedback_comment.strip()) < 10:
+            raise ValidationError(
+                'Detailed feedback is required when rejecting goals. '
+                'Provide at least 10 characters of specific guidance.'
+            )
+        
+        self.status = 'rejected'
+        self.approved_by = None  # Clear previous approval
+        self.approved_at = None
+        self.save()
+        
+        # Create version history
+        self.create_version('rejected', rejected_by, f'Goal rejected: {feedback_comment[:100]}')
+    
+    def can_be_edited_by(self, user):
+        """
+        Check if goal can be edited by user (BR-021).
+        Goal editing allowed until manager approval.
+        """
+        # Employees can edit their own draft or rejected goals
+        if user == self.employee:
+            return self.status in ['draft', 'rejected']
+        
+        # Managers cannot directly edit goals (only provide feedback)
+        return False
+    
+    def create_version(self, change_type, changed_by, change_summary=''):
+        """Create a version history entry for this goal."""
+        # Get the next version number
+        last_version = self.versions.order_by('-version_number').first()
+        next_version = (last_version.version_number + 1) if last_version else 1
+        
+        # Create snapshot of current goal data
+        data_snapshot = {
+            'title': self.title,
+            'description': self.description,
+            'metric': self.metric,
+            'target_value': str(self.target_value) if self.target_value else None,
+            'current_value': str(self.current_value) if self.current_value else None,
+            'unit': self.unit,
+            'start_date': str(self.start_date),
+            'target_date': str(self.target_date),
+            'weight': self.weight,
+            'status': self.status,
+            'priority': self.priority,
+            'goal_type': self.goal_type,
+            'progress_percentage': self.progress_percentage,
+        }
+        
+        GoalVersion.objects.create(
+            goal=self,
+            version_number=next_version,
+            changed_by=changed_by,
+            change_type=change_type,
+            data_snapshot=data_snapshot,
+            change_summary=change_summary
+        )
+    
+    def delete(self, *args, **kwargs):
+        """
+        Override delete to prevent deletion of approved goals (BR-014).
+        Goals cannot be deleted once approved, only cancelled.
+        """
+        if self.status in ['approved', 'in_progress', 'completed']:
+            raise ValidationError({
+                'non_field_errors': 'Cannot delete approved goals. '
+                                   'Goals that have been approved can only be cancelled or edited. '
+                                   'This maintains version history and audit trail.'
+            })
+        super().delete(*args, **kwargs)
+    
+    def save(self, *args, **kwargs):
+        """Override save to create version history automatically."""
+        is_new = not self.pk
+        old_status = None
+        
+        if not is_new:
+            try:
+                old_goal = Goal.objects.get(pk=self.pk)
+                old_status = old_goal.status
+            except Goal.DoesNotExist:
+                pass
+        
+        super().save(*args, **kwargs)
+        
+        # Create version history for status changes
+        if is_new:
+            self.create_version('created', self.employee, 'Goal created')
+        elif old_status and old_status != self.status:
+            change_map = {
+                'submitted': ('submitted', 'Goal submitted for approval'),
+                'approved': ('approved', 'Goal approved'),
+                'in_progress': ('updated', 'Goal marked as in progress'),
+                'completed': ('completed', 'Goal completed'),
+                'cancelled': ('cancelled', 'Goal cancelled'),
+            }
+            if self.status in change_map:
+                change_type, summary = change_map[self.status]
+                self.create_version(change_type, self.employee, summary)
 
 
 class GoalUpdate(models.Model):
@@ -717,3 +924,146 @@ class GoalAlignment(models.Model):
     def __str__(self):
         """String representation of the goal alignment."""
         return f"{self.goal.title} → {self.objective.name}"
+
+
+class GoalFeedback(models.Model):
+    """
+    Manager feedback on employee goals.
+    BR-018: Manager feedback is mandatory for goal rejections.
+    Tracks all review feedback and decisions.
+    """
+    
+    FEEDBACK_TYPE_CHOICES = [
+        ('approval', 'Approval'),
+        ('request_changes', 'Request Changes'),
+        ('rejection', 'Rejection'),
+        ('suggestion', 'Suggestion'),
+        ('alignment_comment', 'Alignment Comment'),
+    ]
+    
+    goal = models.ForeignKey(
+        Goal,
+        on_delete=models.CASCADE,
+        related_name='feedback',
+        help_text='Goal being reviewed'
+    )
+    
+    manager = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='goal_feedback_given',
+        help_text='Manager providing feedback'
+    )
+    
+    feedback_type = models.CharField(
+        max_length=20,
+        choices=FEEDBACK_TYPE_CHOICES,
+        help_text='Type of feedback being provided'
+    )
+    
+    comments = models.TextField(
+        help_text='Manager feedback comments'
+    )
+    
+    # SMART Criteria Review Checklist
+    smart_specific = models.BooleanField(
+        default=True,
+        help_text='Goal clearly defines what will be accomplished'
+    )
+    
+    smart_measurable = models.BooleanField(
+        default=True,
+        help_text='Quantifiable success metrics are present'
+    )
+    
+    smart_achievable = models.BooleanField(
+        default=True,
+        help_text='Goal is realistic given resources and timeframe'
+    )
+    
+    smart_relevant = models.BooleanField(
+        default=True,
+        help_text='Aligns with business objectives and role responsibilities'
+    )
+    
+    smart_time_bound = models.BooleanField(
+        default=True,
+        help_text='Clear deadline within review cycle'
+    )
+    
+    # Additional Review Fields
+    alignment_score = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text='Business alignment rating (1-5)'
+    )
+    
+    challenge_level = models.CharField(
+        max_length=20,
+        choices=[
+            ('too_easy', 'Too Easy'),
+            ('appropriate', 'Appropriate'),
+            ('too_ambitious', 'Too Ambitious'),
+        ],
+        null=True,
+        blank=True,
+        help_text='Manager assessment of goal difficulty'
+    )
+    
+    suggested_modifications = models.TextField(
+        blank=True,
+        help_text='Specific suggestions for goal improvement'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        """Meta options for GoalFeedback model."""
+        verbose_name = 'Goal Feedback'
+        verbose_name_plural = 'Goal Feedback'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        """String representation of the goal feedback."""
+        return f"{self.feedback_type} for {self.goal.title} by {self.manager.full_name}"
+    
+    def clean(self):
+        """
+        Validate feedback data.
+        BR-018: Manager feedback is mandatory for goal rejections.
+        BR-020: Managers can only approve goals for direct reports.
+        """
+        super().clean()
+        
+        # BR-018: Ensure comments provided for rejections and change requests
+        if self.feedback_type in ['rejection', 'request_changes']:
+            if not self.comments or len(self.comments.strip()) < 10:
+                raise ValidationError({
+                    'comments': 'Detailed feedback is required when requesting changes or rejecting goals. '
+                               'Provide at least 10 characters of specific guidance.'
+                })
+        
+        # BR-020: Verify manager-employee relationship
+        if self.goal and self.manager:
+            # Check if manager is the employee's direct manager
+            if hasattr(self.goal.employee, 'manager') and self.goal.employee.manager != self.manager:
+                # Allow if user is HR
+                if self.manager.role not in ['hr', 'admin']:
+                    raise ValidationError({
+                        'manager': 'You can only review goals for your direct reports. '
+                                  'This goal belongs to an employee who does not report to you.'
+                    })
+    
+    @property
+    def smart_compliance_score(self):
+        """Calculate SMART compliance percentage."""
+        criteria = [
+            self.smart_specific,
+            self.smart_measurable,
+            self.smart_achievable,
+            self.smart_relevant,
+            self.smart_time_bound
+        ]
+        return (sum(criteria) / len(criteria)) * 100
