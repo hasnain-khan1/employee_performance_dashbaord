@@ -46,6 +46,13 @@ lerna-debug.log*
 # Frontend build
 frontend/dist/
 frontend/build/
+frontend/.vite/
+frontend/dist-ssr/
+frontend/*.local
+
+# Vite
+.vite
+*.local
 
 # IDE
 .vscode/
@@ -86,4 +93,3 @@ cypress/screenshots/
 # Temporary files
 *.tmp
 *.temp
-.vite
