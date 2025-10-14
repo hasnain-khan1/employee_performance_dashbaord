@@ -3,6 +3,7 @@ Feedback models for the EPMS system.
 
 This module contains models for peer feedback management,
 including feedback requests, responses, and evaluation.
+Also includes manager-to-employee continuous feedback.
 Implements BR-022, BR-023, BR-024, BR-025, BR-026.
 """
 
@@ -515,3 +516,146 @@ class FeedbackTemplate(models.Model):
     def __str__(self):
         """String representation of the feedback template."""
         return self.name
+
+
+class ManagerFeedback(models.Model):
+    """
+    Manager-to-Employee continuous feedback model.
+    
+    Allows managers to provide ongoing feedback to their direct reports,
+    separate from formal peer feedback and performance reviews.
+    """
+    
+    # Feedback type choices
+    TYPE_CHOICES = [
+        ('recognition', 'Recognition'),
+        ('constructive', 'Constructive'),
+        ('coaching', 'Coaching'),
+        ('development', 'Development'),
+        ('general', 'General'),
+    ]
+    
+    # Visibility choices
+    VISIBILITY_CHOICES = [
+        ('private', 'Private (Manager & Employee only)'),
+        ('hr', 'Visible to HR'),
+        ('public', 'Public (Visible to all)'),
+    ]
+    
+    manager = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='manager_feedback_given',
+        help_text='Manager providing the feedback'
+    )
+    
+    employee = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.CASCADE,
+        related_name='manager_feedback_received',
+        help_text='Employee receiving the feedback'
+    )
+    
+    cycle = models.ForeignKey(
+        'cycles.ReviewCycle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manager_feedback',
+        help_text='Optional: Associated review cycle'
+    )
+    
+    feedback_type = models.CharField(
+        max_length=20,
+        choices=TYPE_CHOICES,
+        default='general',
+        help_text='Type of feedback'
+    )
+    
+    subject = models.CharField(
+        max_length=200,
+        help_text='Brief subject/title of the feedback'
+    )
+    
+    feedback = models.TextField(
+        help_text='Detailed feedback content'
+    )
+    
+    strengths = models.TextField(
+        blank=True,
+        help_text='Specific strengths observed (optional)'
+    )
+    
+    areas_for_improvement = models.TextField(
+        blank=True,
+        help_text='Areas for growth and development (optional)'
+    )
+    
+    action_items = models.TextField(
+        blank=True,
+        help_text='Suggested action items or next steps (optional)'
+    )
+    
+    visibility = models.CharField(
+        max_length=20,
+        choices=VISIBILITY_CHOICES,
+        default='private',
+        help_text='Who can view this feedback'
+    )
+    
+    is_acknowledged = models.BooleanField(
+        default=False,
+        help_text='Whether employee has acknowledged viewing this feedback'
+    )
+    
+    acknowledged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When employee acknowledged the feedback'
+    )
+    
+    employee_response = models.TextField(
+        blank=True,
+        help_text='Optional response from the employee'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        """Meta options for ManagerFeedback model."""
+        verbose_name = 'Manager Feedback'
+        verbose_name_plural = 'Manager Feedback'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['manager', 'employee']),
+            models.Index(fields=['employee', '-created_at']),
+            models.Index(fields=['-created_at']),
+        ]
+    
+    def __str__(self):
+        """String representation of the manager feedback."""
+        return f"{self.manager.get_full_name()} → {self.employee.get_full_name()}: {self.subject}"
+    
+    def clean(self):
+        """Validate manager feedback."""
+        super().clean()
+        
+        # Validate that manager is actually the employee's manager
+        if self.employee.manager != self.manager:
+            raise ValidationError({
+                'manager': 'You can only provide feedback to your direct reports.'
+            })
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+    
+    def acknowledge(self, response=None):
+        """Mark feedback as acknowledged by employee."""
+        self.is_acknowledged = True
+        self.acknowledged_at = timezone.now()
+        if response:
+            self.employee_response = response
+        self.save()

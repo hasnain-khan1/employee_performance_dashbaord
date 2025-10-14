@@ -72,24 +72,34 @@ class Goal(models.Model):
         help_text='Review cycle this goal belongs to'
     )
     
-    # SMART criteria
+    # SMART criteria (optional for drafts, recommended for submission)
     specific = models.TextField(
+        blank=True,
+        default='',
         help_text='Specific: What exactly will be accomplished?'
     )
     
     measurable = models.TextField(
+        blank=True,
+        default='',
         help_text='Measurable: How will success be measured?'
     )
     
     achievable = models.TextField(
+        blank=True,
+        default='',
         help_text='Achievable: Is this goal realistic and attainable?'
     )
     
     relevant = models.TextField(
+        blank=True,
+        default='',
         help_text='Relevant: How does this align with broader objectives?'
     )
     
     time_bound = models.TextField(
+        blank=True,
+        default='',
         help_text='Time-bound: What is the deadline and timeline?'
     )
     

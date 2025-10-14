@@ -23,4 +23,11 @@ export const feedbackAPI = {
   acceptFeedbackRequest: (id) => api.post(`/feedback/${id}/accept/`),
   declineFeedbackRequest: (id, data) => api.post(`/feedback/${id}/decline/`, data),
   submitFeedbackResponse: (id, data) => api.post(`/feedback/${id}/submit/`, data),
+  
+  // Manager-to-employee feedback
+  getManagerFeedback: (params = {}) => api.get('/feedback/manager/', { params }),
+  getManagerFeedbackDetail: (id) => api.get(`/feedback/manager/${id}/`),
+  createManagerFeedback: (data) => api.post('/feedback/manager/', data),
+  updateManagerFeedback: (id, data) => api.patch(`/feedback/manager/${id}/`, data),
+  acknowledgeFeedback: (id, data = {}) => api.post(`/feedback/manager/${id}/acknowledge/`, data),
 }

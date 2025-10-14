@@ -12,11 +12,12 @@ from drf_spectacular.types import OpenApiTypes
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import FeedbackRequest, FeedbackResponse, FeedbackTemplate
+from .models import FeedbackRequest, FeedbackResponse, FeedbackTemplate, ManagerFeedback
 from .serializers import (
     FeedbackRequestSerializer, FeedbackRequestListSerializer,
     FeedbackResponseSerializer, FeedbackTemplateSerializer,
-    FeedbackTemplateListSerializer
+    FeedbackTemplateListSerializer, ManagerFeedbackSerializer,
+    ManagerFeedbackListSerializer
 )
 
 
@@ -331,4 +332,195 @@ class FeedbackTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().delete(request, *args, **kwargs)
+
+
+class ManagerFeedbackListView(generics.ListCreateAPIView):
+    """
+    Manager feedback list and creation endpoint.
+    
+    Allows managers to provide feedback to their direct reports
+    and employees to view feedback received from their managers.
+    """
+    
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        """Return appropriate serializer based on request method."""
+        if self.request.method == 'GET':
+            return ManagerFeedbackListSerializer
+        return ManagerFeedbackSerializer
+    
+    def get_queryset(self):
+        """Get filtered queryset of manager feedback."""
+        user = self.request.user
+        queryset = ManagerFeedback.objects.select_related(
+            'manager', 'employee', 'cycle'
+        )
+        
+        # Filter based on user role
+        view_type = self.request.query_params.get('view')
+        if view_type == 'given':
+            # Manager view: feedback they've given
+            queryset = queryset.filter(manager=user)
+        elif view_type == 'received':
+            # Employee view: feedback they've received
+            queryset = queryset.filter(employee=user)
+        else:
+            # Default: show feedback where user is involved
+            queryset = queryset.filter(
+                Q(manager=user) | Q(employee=user)
+            )
+        
+        # Filter by employee (for managers viewing specific employee)
+        employee_id = self.request.query_params.get('employee_id')
+        if employee_id:
+            queryset = queryset.filter(employee_id=employee_id)
+        
+        # Filter by feedback type
+        feedback_type = self.request.query_params.get('feedback_type')
+        if feedback_type:
+            queryset = queryset.filter(feedback_type=feedback_type)
+        
+        # Filter by acknowledgment status
+        is_acknowledged = self.request.query_params.get('is_acknowledged')
+        if is_acknowledged is not None:
+            queryset = queryset.filter(is_acknowledged=is_acknowledged.lower() == 'true')
+        
+        # Filter by cycle
+        cycle = self.request.query_params.get('cycle')
+        if cycle:
+            queryset = queryset.filter(cycle_id=cycle)
+        
+        return queryset.order_by('-created_at')
+    
+    @extend_schema(
+        summary="List Manager Feedback",
+        description="Get a list of manager feedback with optional filtering.",
+        parameters=[
+            OpenApiParameter(
+                name='view',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Filter by view type: "given" or "received"'
+            ),
+            OpenApiParameter(
+                name='employee_id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Filter by employee ID'
+            ),
+            OpenApiParameter(
+                name='feedback_type',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Filter by feedback type'
+            ),
+            OpenApiParameter(
+                name='is_acknowledged',
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description='Filter by acknowledgment status'
+            ),
+            OpenApiParameter(
+                name='cycle',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Filter by cycle ID'
+            ),
+        ],
+        responses={
+            200: ManagerFeedbackListSerializer(many=True),
+            401: "Authentication required"
+        }
+    )
+    def get(self, request, *args, **kwargs):
+        """Get list of manager feedback."""
+        return super().get(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary="Create Manager Feedback",
+        description="Create new feedback for a direct report (Managers only).",
+        responses={
+            201: ManagerFeedbackSerializer,
+            400: "Validation error",
+            401: "Authentication required"
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        """Create new manager feedback."""
+        return super().post(request, *args, **kwargs)
+
+
+class ManagerFeedbackDetailView(generics.RetrieveUpdateAPIView):
+    """
+    Manager feedback detail endpoint.
+    
+    Provides detailed information about a specific feedback
+    and allows employees to acknowledge and respond.
+    """
+    
+    serializer_class = ManagerFeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+    
+    def get_queryset(self):
+        """Get queryset filtered by user involvement."""
+        user = self.request.user
+        return ManagerFeedback.objects.filter(
+            Q(manager=user) | Q(employee=user)
+        )
+    
+    @extend_schema(
+        summary="Get Manager Feedback Details",
+        description="Retrieve detailed information about a specific feedback.",
+        responses={
+            200: ManagerFeedbackSerializer,
+            404: "Feedback not found",
+            401: "Authentication required"
+        }
+    )
+    def get(self, request, *args, **kwargs):
+        """Get feedback details."""
+        return super().get(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary="Update Manager Feedback",
+        description="Update feedback (manager) or acknowledge/respond (employee).",
+        responses={
+            200: ManagerFeedbackSerializer,
+            400: "Validation error",
+            404: "Feedback not found",
+            401: "Authentication required"
+        }
+    )
+    def patch(self, request, *args, **kwargs):
+        """Update feedback."""
+        return super().patch(request, *args, **kwargs)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def acknowledge_feedback(request, pk):
+    """
+    Employee acknowledges receiving feedback.
+    
+    Allows employees to mark feedback as acknowledged and
+    optionally provide a response.
+    """
+    try:
+        feedback = ManagerFeedback.objects.get(
+            pk=pk,
+            employee=request.user
+        )
+    except ManagerFeedback.DoesNotExist:
+        return Response(
+            {'error': 'Feedback not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    employee_response = request.data.get('employee_response', '')
+    feedback.acknowledge(response=employee_response)
+    
+    serializer = ManagerFeedbackSerializer(feedback)
+    return Response(serializer.data)
 

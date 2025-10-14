@@ -253,7 +253,7 @@
                   max="100"
                   :rules="[v => !!v || 'Weight is required', v => v >= 1 && v <= 100 || 'Weight must be between 1 and 100']"
                   :readonly="viewingGoal"
-                  hint="Enter the percentage weight for this goal (1-100%)"
+                  hint="Importance of this goal (1-100%). Total across all goals must equal 100% before submission. Example: High priority goal = 35%, Medium = 25%, Low = 15%"
                   persistent-hint
                   required
                 />
@@ -282,15 +282,19 @@
             <!-- SMART Criteria -->
             <v-divider class="my-4" />
             <h3 class="text-h6 mb-4">SMART Criteria</h3>
+            <p class="text-body-2 text-grey-darken-1 mb-4">
+              Complete these sections to ensure your goal meets SMART criteria. These fields are strongly recommended before submitting for approval.
+            </p>
 
             <v-row>
               <v-col cols="12">
                 <v-textarea
                   v-model="goalForm.specific"
                   label="Specific - What exactly will be accomplished?"
-                  :rules="[v => !!v || 'Specific criteria is required']"
                   :readonly="viewingGoal"
-                  required
+                  hint="Be clear and specific. Example: 'Launch new customer portal with 5 key features' instead of 'Improve website'"
+                  persistent-hint
+                  rows="2"
                 />
               </v-col>
             </v-row>
@@ -300,9 +304,10 @@
                 <v-textarea
                   v-model="goalForm.measurable"
                   label="Measurable - How will success be measured?"
-                  :rules="[v => !!v || 'Measurable criteria is required']"
                   :readonly="viewingGoal"
-                  required
+                  hint="Include numbers and metrics. Example: 'Increase customer satisfaction score from 7.5 to 8.5' or 'Process 100 applications per week'"
+                  persistent-hint
+                  rows="2"
                 />
               </v-col>
             </v-row>
@@ -312,9 +317,10 @@
                 <v-textarea
                   v-model="goalForm.achievable"
                   label="Achievable - Is this goal realistic and attainable?"
-                  :rules="[v => !!v || 'Achievable criteria is required']"
                   :readonly="viewingGoal"
-                  required
+                  hint="Explain why this goal is realistic. Example: 'Team has necessary skills and resources, similar projects completed in past 6 months'"
+                  persistent-hint
+                  rows="2"
                 />
               </v-col>
             </v-row>
@@ -324,9 +330,10 @@
                 <v-textarea
                   v-model="goalForm.relevant"
                   label="Relevant - How does this align with broader objectives?"
-                  :rules="[v => !!v || 'Relevant criteria is required']"
                   :readonly="viewingGoal"
-                  required
+                  hint="Connect to company/department goals. Example: 'Supports Q2 initiative to improve customer retention by 15%'"
+                  persistent-hint
+                  rows="2"
                 />
               </v-col>
             </v-row>
@@ -336,9 +343,10 @@
                 <v-textarea
                   v-model="goalForm.time_bound"
                   label="Time-bound - What is the deadline and timeline?"
-                  :rules="[v => !!v || 'Time-bound criteria is required']"
                   :readonly="viewingGoal"
-                  required
+                  hint="Specify milestones and deadlines. Example: 'Phase 1 by March 31, Phase 2 by May 15, Launch by June 30'"
+                  persistent-hint
+                  rows="2"
                 />
               </v-col>
             </v-row>
@@ -502,6 +510,15 @@ const openCreateDialog = () => {
 const editGoal = (goal) => {
   editingGoal.value = goal
   // Properly map all fields from the goal
+  // Ensure SMART criteria fields are properly populated from the goal object
+  console.log('Editing goal with SMART criteria:', {
+    specific: goal.specific,
+    measurable: goal.measurable,
+    achievable: goal.achievable,
+    relevant: goal.relevant,
+    time_bound: goal.time_bound
+  })
+  
   goalForm.value = {
     title: goal.title || '',
     description: goal.description || '',
@@ -710,6 +727,15 @@ const viewGoal = (goal) => {
   viewingGoal.value = true
   editingGoal.value = goal
   // Populate form with goal data for viewing
+  // Ensure SMART criteria fields are properly populated
+  console.log('Viewing goal with SMART criteria:', {
+    specific: goal.specific,
+    measurable: goal.measurable,
+    achievable: goal.achievable,
+    relevant: goal.relevant,
+    time_bound: goal.time_bound
+  })
+  
   goalForm.value = {
     title: goal.title || '',
     description: goal.description || '',

@@ -158,6 +158,11 @@ const navigationItems = computed(() => {
         to: '/manager/team-reviews'
       },
       {
+        title: 'Team Feedback',
+        icon: 'mdi-message-text',
+        to: '/manager/team-feedback'
+      },
+      {
         title: 'Feedback Requests',
         icon: 'mdi-comment-plus',
         to: '/manager/feedback-requests'

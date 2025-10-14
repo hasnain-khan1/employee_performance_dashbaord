@@ -15,6 +15,7 @@ import EmployeeFeedbackView from '@/views/Employee/FeedbackView.vue'
 import ManagerTeamGoalsView from '@/views/Manager/TeamGoalsView.vue'
 import ManagerTeamReviewsView from '@/views/Manager/TeamReviewsView.vue'
 import ManagerFeedbackRequestsView from '@/views/Manager/FeedbackRequestsView.vue'
+import ManagerTeamFeedbackView from '@/views/Manager/TeamFeedbackView.vue'
 
 // HR views
 import HREmployeesView from '@/views/HR/EmployeesView.vue'
@@ -91,6 +92,12 @@ const routes = [
     path: '/manager/feedback-requests',
     name: 'ManagerFeedbackRequests',
     component: ManagerFeedbackRequestsView,
+    meta: { requiresAuth: true, role: 'manager' }
+  },
+  {
+    path: '/manager/team-feedback',
+    name: 'ManagerTeamFeedback',
+    component: ManagerTeamFeedbackView,
     meta: { requiresAuth: true, role: 'manager' }
   },
   // HR routes
