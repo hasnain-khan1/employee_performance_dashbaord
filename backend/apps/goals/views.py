@@ -20,6 +20,7 @@ from .serializers import (
     GoalUpdateSerializer
 )
 from apps.cycles.models import ReviewCycle
+from django.core.exceptions import ValidationError
 
 
 class GoalListView(generics.ListCreateAPIView):
@@ -529,3 +530,115 @@ def submit_bulk_feedback(request):
         'message': f'Bulk feedback submitted for {len(updated_goals)} goal(s)',
         'updated_goals': updated_goals
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@extend_schema(
+    summary="Submit Goal for Approval",
+    description="Submit a goal for manager approval. Validates SMART criteria before submission.",
+    responses={
+        200: "Goal submitted successfully",
+        400: "Validation error",
+        401: "Authentication required",
+        404: "Goal not found"
+    }
+)
+def submit_goal_for_approval(request, goal_id):
+    """
+    Submit a goal for manager approval.
+    
+    Validates that the goal meets SMART criteria and
+    changes status from 'draft' to 'submitted'.
+    """
+    try:
+        goal = Goal.objects.get(id=goal_id, employee=request.user)
+    except Goal.DoesNotExist:
+        return Response(
+            {'error': 'Goal not found or you are not authorized to submit this goal'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Check if goal is in draft status
+    if goal.status != 'draft':
+        return Response(
+            {'error': f'Goal must be in "draft" status to be submitted. Current status: {goal.status}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate SMART criteria before submission
+    validation_errors = []
+    
+    # Check if required fields are filled
+    if not goal.title or len(goal.title.strip()) < 5:
+        validation_errors.append('Goal title must be at least 5 characters long')
+    
+    if not goal.description or len(goal.description.strip()) < 20:
+        validation_errors.append('Goal description must be at least 20 characters long')
+    
+    if not goal.metric or len(goal.metric.strip()) == 0:
+        validation_errors.append('A measurable metric is required')
+    
+    if not goal.target_date:
+        validation_errors.append('Target date is required')
+    
+    # Check SMART criteria completeness
+    smart_fields = ['specific', 'measurable', 'achievable', 'relevant', 'time_bound']
+    missing_smart = []
+    
+    for field in smart_fields:
+        if not getattr(goal, field) or len(getattr(goal, field).strip()) == 0:
+            missing_smart.append(field.replace('_', ' ').title())
+    
+    if missing_smart:
+        validation_errors.append(f'SMART criteria must be completed: {", ".join(missing_smart)}')
+    
+    # Check if target date is in the future
+    if goal.target_date and goal.target_date <= timezone.now().date():
+        validation_errors.append('Target date must be in the future')
+    
+    # Check if goal is within the review cycle
+    if goal.cycle:
+        if goal.target_date < goal.cycle.start_date:
+            validation_errors.append(f'Target date cannot be before cycle start date ({goal.cycle.start_date})')
+        if goal.target_date > goal.cycle.end_date:
+            validation_errors.append(f'Target date cannot be after cycle end date ({goal.cycle.end_date})')
+    
+    if validation_errors:
+        return Response(
+            {'error': 'Goal validation failed', 'details': validation_errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Update goal status to submitted
+        goal.status = 'submitted'
+        goal.submitted_at = timezone.now()
+        goal.last_updated = timezone.now()
+        goal.save()
+        
+        # Create audit trail
+        GoalUpdate.objects.create(
+            goal=goal,
+            updated_by=request.user,
+            update_type='submission',
+            description='Goal submitted for manager approval',
+            notes='Goal submitted for approval'
+        )
+        
+        return Response({
+            'message': 'Goal submitted for approval successfully',
+            'goal_status': goal.status,
+            'submitted_at': goal.submitted_at
+        })
+        
+    except ValidationError as e:
+        return Response(
+            {'error': 'Goal validation failed', 'details': str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': 'Failed to submit goal', 'details': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

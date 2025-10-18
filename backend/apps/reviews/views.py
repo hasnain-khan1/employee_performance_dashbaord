@@ -316,8 +316,8 @@ def get_employee_dossier(request, employee_id):
                 'id': employee.id,
                 'name': employee.get_full_name(),
                 'email': employee.email,
-                'department': employee.department,
-                'position': employee.position,
+                'department': employee.department.name if employee.department else None,
+                'position': employee.job_title,
                 'hire_date': employee.date_joined
             },
             'cycle': {

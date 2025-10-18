@@ -3,6 +3,14 @@
     <v-row>
       <v-col cols="12">
         <h1 class="text-h4 mb-6">Profile</h1>
+        <!-- Debug info - remove in production -->
+        <v-card v-if="false" class="mb-4" color="grey-lighten-4">
+          <v-card-title>Debug Info</v-card-title>
+          <v-card-text>
+            <p><strong>User from store:</strong> {{ JSON.stringify(user, null, 2) }}</p>
+            <p><strong>Profile form:</strong> {{ JSON.stringify(profileForm, null, 2) }}</p>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
 
@@ -312,7 +320,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useToast } from 'vue-toastification'
 
@@ -320,8 +328,27 @@ const authStore = useAuthStore()
 const toast = useToast()
 
 // Reactive data
-const profileForm = ref({})
-const extendedForm = ref({})
+const profileForm = ref({
+  first_name: '',
+  last_name: '',
+  email: '',
+  phone: '',
+  job_title: '',
+  bio: '',
+  avatar: ''
+})
+const extendedForm = ref({
+  address: '',
+  city: '',
+  state: '',
+  zip_code: '',
+  country: '',
+  emergency_contact: '',
+  emergency_phone: '',
+  skills: '',
+  certifications: '',
+  languages: ''
+})
 const passwordForm = ref({
   old_password: '',
   new_password: '',
@@ -339,15 +366,76 @@ const avatarFile = ref(null)
 // Computed properties
 const user = computed(() => authStore.user)
 
+// Watch for user data changes
+watch(user, (newUser) => {
+  if (newUser) {
+    console.log('User data changed, updating form:', newUser)
+    profileForm.value = {
+      first_name: newUser.first_name || '',
+      last_name: newUser.last_name || '',
+      email: newUser.email || '',
+      phone: newUser.phone || '',
+      job_title: newUser.job_title || '',
+      bio: newUser.bio || '',
+      avatar: newUser.avatar || ''
+    }
+  }
+}, { immediate: true })
+
 // Methods
 const loadProfile = async () => {
   try {
+    // First try to get fresh data from API
     const response = await authStore.getProfile()
-    profileForm.value = { ...response }
-    extendedForm.value = { ...response.profile } || {}
+    console.log('Profile response:', response)
+    
+    // Populate the form with the response data
+    profileForm.value = {
+      first_name: response.first_name || '',
+      last_name: response.last_name || '',
+      email: response.email || '',
+      phone: response.phone || '',
+      job_title: response.job_title || '',
+      bio: response.bio || '',
+      avatar: response.avatar || ''
+    }
+    
+    // Handle extended profile data
+    if (response.profile) {
+      extendedForm.value = {
+        address: response.profile.address || '',
+        city: response.profile.city || '',
+        state: response.profile.state || '',
+        zip_code: response.profile.zip_code || '',
+        country: response.profile.country || '',
+        emergency_contact: response.profile.emergency_contact || '',
+        emergency_phone: response.profile.emergency_phone || '',
+        skills: response.profile.skills || '',
+        certifications: response.profile.certifications || '',
+        languages: response.profile.languages || ''
+      }
+    } else {
+      extendedForm.value = {}
+    }
+    
+    console.log('Profile form populated:', profileForm.value)
+    console.log('Extended form populated:', extendedForm.value)
   } catch (error) {
     console.error('Error loading profile:', error)
     toast.error('Failed to load profile')
+    
+    // Fallback to existing user data from store
+    if (user.value) {
+      profileForm.value = {
+        first_name: user.value.first_name || '',
+        last_name: user.value.last_name || '',
+        email: user.value.email || '',
+        phone: user.value.phone || '',
+        job_title: user.value.job_title || '',
+        bio: user.value.bio || '',
+        avatar: user.value.avatar || ''
+      }
+    }
   }
 }
 
@@ -421,8 +509,27 @@ const getStatusColor = (status) => {
   return colors[status] || 'grey'
 }
 
+// Initialize form with existing user data
+const initializeForm = () => {
+  if (user.value) {
+    profileForm.value = {
+      first_name: user.value.first_name || '',
+      last_name: user.value.last_name || '',
+      email: user.value.email || '',
+      phone: user.value.phone || '',
+      job_title: user.value.job_title || '',
+      bio: user.value.bio || '',
+      avatar: user.value.avatar || ''
+    }
+    console.log('Form initialized with user data:', profileForm.value)
+  }
+}
+
 // Lifecycle
 onMounted(() => {
+  // Initialize form first with existing data
+  initializeForm()
+  // Then try to load fresh data
   loadProfile()
 })
 </script>

@@ -291,8 +291,8 @@ def get_employee_dashboard_data(request):
                 'id': user.id,
                 'name': user.get_full_name(),
                 'email': user.email,
-                'position': user.position,
-                'department': user.department,
+                'position': user.job_title,
+                'department': user.department.name if user.department else None,
                 'avatar': user.avatar.url if user.avatar else None
             },
             'progress': {

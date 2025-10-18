@@ -1,44 +1,63 @@
 <template>
-  <v-container fluid>
+  <v-container fluid class="dashboard-container">
     <!-- Header -->
     <v-row>
       <v-col cols="12">
-        <div class="d-flex align-center justify-space-between mb-6">
-          <div>
-            <h1 class="text-h4 font-weight-bold">
-              <v-icon size="large" color="primary" class="mr-2">mdi-view-dashboard</v-icon>
-              Dashboard
-            </h1>
-            <p class="text-subtitle-1 text-grey mt-2">
-              Welcome back, {{ user?.full_name || 'User' }}!
-            </p>
+        <div class="dashboard-header">
+          <div class="header-content">
+            <div class="welcome-section">
+              <h1 class="dashboard-title">
+                <v-icon size="32" color="primary" class="mr-3">mdi-view-dashboard</v-icon>
+                Dashboard
+              </h1>
+              <p class="welcome-text">
+                Welcome back, <span class="user-name">{{ user?.full_name || 'User' }}</span>!
+              </p>
+              <p class="date-text">{{ currentDate }}</p>
+            </div>
+            <v-btn
+              color="primary"
+              prepend-icon="mdi-refresh"
+              @click="refreshDashboard"
+              :loading="loading"
+              class="refresh-btn"
+              size="large"
+              rounded="lg"
+            >
+              Refresh
+            </v-btn>
           </div>
-          <v-btn
-            color="primary"
-            prepend-icon="mdi-refresh"
-            @click="refreshDashboard"
-            :loading="loading"
-          >
-            Refresh
-          </v-btn>
         </div>
       </v-col>
     </v-row>
 
     <!-- Quick Stats -->
-    <v-row v-if="quickStats.length > 0">
+    <v-row v-if="quickStats.length > 0" class="stats-row">
       <v-col cols="12" sm="6" md="3" v-for="(stat, index) in quickStats" :key="'stat-' + index">
-        <v-card class="stat-card" :class="stat.color" elevation="2">
-          <v-card-text>
-            <div class="d-flex align-center justify-space-between">
-              <div>
-                <div class="text-h3 font-weight-bold white--text">{{ stat.value }}</div>
-                <div class="text-subtitle-2 white--text mt-1">{{ stat.title }}</div>
+        <v-card 
+          class="stat-card modern-stat-card" 
+          :class="stat.colorClass"
+          elevation="0"
+          rounded="xl"
+        >
+          <v-card-text class="stat-content">
+            <div class="stat-header">
+              <div class="stat-icon-container">
+                <v-icon :color="stat.iconColor" size="28">{{ stat.icon }}</v-icon>
               </div>
-              <v-avatar :color="stat.iconBg || 'white'" size="60">
-                <v-icon :color="stat.color" size="30">{{ stat.icon }}</v-icon>
-              </v-avatar>
+              <div class="stat-trend" v-if="stat.trend">
+                <v-icon 
+                  :color="stat.trend > 0 ? 'success' : 'error'" 
+                  size="16"
+                >
+                  {{ stat.trend > 0 ? 'mdi-trending-up' : 'mdi-trending-down' }}
+                </v-icon>
+                <span class="trend-text">{{ Math.abs(stat.trend) }}%</span>
+              </div>
             </div>
+            <div class="stat-value">{{ stat.value }}</div>
+            <div class="stat-title">{{ stat.title }}</div>
+            <div class="stat-subtitle" v-if="stat.subtitle">{{ stat.subtitle }}</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -437,6 +456,15 @@ const isEmployee = computed(() => authStore.isEmployee)
 const isManager = computed(() => authStore.isManager)
 const isHR = computed(() => authStore.isHR)
 
+const currentDate = computed(() => {
+  return new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+})
+
 // Reactive data
 const loading = ref(false)
 const quickStats = ref([])
@@ -468,30 +496,38 @@ const loadDashboardData = async () => {
       { 
         title: 'Active Goals', 
         value: statsResponse.data.active_goals || 0,
+        subtitle: 'In Progress',
         icon: 'mdi-target',
-        color: 'bg-primary',
-        iconBg: 'rgba(255,255,255,0.3)'
+        iconColor: 'primary',
+        colorClass: 'stat-primary',
+        trend: 12
       },
       { 
         title: 'Pending Reviews', 
         value: statsResponse.data.pending_reviews || 0,
+        subtitle: 'Awaiting Action',
         icon: 'mdi-clipboard-text',
-        color: 'bg-orange',
-        iconBg: 'rgba(255,255,255,0.3)'
+        iconColor: 'warning',
+        colorClass: 'stat-warning',
+        trend: -5
       },
       { 
         title: 'Feedback Received', 
         value: statsResponse.data.feedback_received || 0,
+        subtitle: 'This Month',
         icon: 'mdi-comment-text',
-        color: 'bg-green',
-        iconBg: 'rgba(255,255,255,0.3)'
+        iconColor: 'success',
+        colorClass: 'stat-success',
+        trend: 8
       },
       { 
         title: 'Completion Rate', 
         value: `${statsResponse.data.completion_rate || 0}%`,
+        subtitle: 'Overall Performance',
         icon: 'mdi-chart-line',
-        color: 'bg-blue',
-        iconBg: 'rgba(255,255,255,0.3)'
+        iconColor: 'info',
+        colorClass: 'stat-info',
+        trend: 15
       }
     ]
     
@@ -596,36 +632,253 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.stat-card {
+/* Dashboard Container */
+.dashboard-container {
+  background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%);
+  min-height: 100vh;
+  padding: 24px;
+}
+
+/* Header Styling */
+.dashboard-header {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+  border-radius: 20px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.welcome-section {
+  flex: 1;
+}
+
+.dashboard-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.welcome-text {
+  font-size: 1.25rem;
+  color: #64748B;
+  margin-bottom: 4px;
+}
+
+.user-name {
+  color: #2563EB;
+  font-weight: 600;
+}
+
+.date-text {
+  font-size: 0.875rem;
+  color: #94A3B8;
+  margin: 0;
+}
+
+.refresh-btn {
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  transition: all 0.3s ease;
+}
+
+.refresh-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+}
+
+/* Stats Row */
+.stats-row {
+  margin-bottom: 32px;
+}
+
+/* Modern Stat Cards */
+.modern-stat-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  position: relative;
+}
+
+.modern-stat-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.modern-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #2563EB, #1D4ED8);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.modern-stat-card:hover::before {
+  opacity: 1;
+}
+
+.stat-content {
+  padding: 24px;
+  position: relative;
+}
+
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.stat-icon-container {
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
-  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.1);
+  transition: all 0.3s ease;
 }
 
-.stat-card:hover {
-  transform: translateY(-4px);
+.modern-stat-card:hover .stat-icon-container {
+  transform: scale(1.1);
+  background: rgba(37, 99, 235, 0.15);
 }
 
-.border-b {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+.stat-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.bg-primary {
-  background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+.trend-text {
+  font-size: 0.75rem;
 }
 
-.bg-orange {
-  background: linear-gradient(135deg, #FF6F00 0%, #F57C00 100%);
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1;
+  margin-bottom: 8px;
 }
 
-.bg-green {
-  background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%);
+.stat-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 4px;
 }
 
-.bg-blue {
-  background: linear-gradient(135deg, #0288D1 0%, #0277BD 100%);
+.stat-subtitle {
+  font-size: 0.875rem;
+  color: #94A3B8;
+  margin: 0;
 }
 
-.bg-error {
-  background: linear-gradient(135deg, #D32F2F 0%, #C62828 100%);
+/* Stat Card Color Variants */
+.stat-primary {
+  background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+  border-color: rgba(37, 99, 235, 0.2);
 }
+
+.stat-primary .stat-icon-container {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.stat-warning {
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.stat-warning .stat-icon-container {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.stat-success {
+  background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.stat-success .stat-icon-container {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.stat-info {
+  background: linear-gradient(135deg, #CFFAFE 0%, #A5F3FC 100%);
+  border-color: rgba(6, 182, 212, 0.2);
+}
+
+.stat-info .stat-icon-container {
+  background: rgba(6, 182, 212, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 16px;
+  }
+  
+  .dashboard-header {
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .dashboard-title {
+    font-size: 2rem;
+  }
+  
+  .stat-content {
+    padding: 20px;
+  }
+  
+  .stat-value {
+    font-size: 2rem;
+  }
+}
+
+/* Smooth Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modern-stat-card {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.modern-stat-card:nth-child(1) { animation-delay: 0.1s; }
+.modern-stat-card:nth-child(2) { animation-delay: 0.2s; }
+.modern-stat-card:nth-child(3) { animation-delay: 0.3s; }
+.modern-stat-card:nth-child(4) { animation-delay: 0.4s; }
 </style>

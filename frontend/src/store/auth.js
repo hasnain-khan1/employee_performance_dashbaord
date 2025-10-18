@@ -142,6 +142,20 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  const getProfile = async () => {
+    try {
+      loading.value = true
+      const response = await authAPI.getProfile()
+      user.value = response.data
+      localStorage.setItem('user', JSON.stringify(response.data))
+      return response.data
+    } catch (error) {
+      throw error
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     // State
     user,
@@ -163,6 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
     checkAuth,
     refreshAccessToken,
     updateProfile,
-    changePassword
+    changePassword,
+    getProfile
   }
 })
