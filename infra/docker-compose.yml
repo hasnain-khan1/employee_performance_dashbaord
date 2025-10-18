@@ -3,54 +3,73 @@ version: '3.8'
 services:
   # PostgreSQL Database
   db:
-    image: postgres:15
+    image: postgres:15-alpine
+    container_name: epms_db
     environment:
-      POSTGRES_DB: epms_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-epms_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-epms_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - epms_network
 
   # Redis Cache
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    container_name: epms_redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - epms_network
 
   # Django Backend
   backend:
     build:
       context: ../backend
       dockerfile: Dockerfile
+      args:
+        - PYTHON_VERSION=3.11
+    container_name: epms_backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
-      - DEBUG=True
-      - DB_NAME=epms_db
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      - DEBUG=${DEBUG:-True}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-me-in-production}
+      - DB_NAME=${POSTGRES_DB:-epms_db}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - DB_HOST=db
       - DB_PORT=5432
-      - REDIS_URL=redis://redis:6379/1
-      - SECRET_KEY=django-insecure-change-me-in-production
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/1
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
       - ../backend:/app
       - backend_static:/app/staticfiles
       - backend_media:/app/media
+      - backend_logs:/app/logs
     depends_on:
       db:
         condition: service_healthy
@@ -59,55 +78,119 @@ services:
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
+             python manage.py seed_data &&
              python manage.py runserver 0.0.0.0:8000"
     healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - epms_network
 
   # Vue.js Frontend
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        - NODE_VERSION=18
+    container_name: epms_frontend
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000/api
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000/api}
+      - VITE_APP_TITLE=${VITE_APP_TITLE:-Employee Performance Management System}
+      - NODE_ENV=${NODE_ENV:-development}
     volumes:
       - ../frontend:/app
       - /app/node_modules
+      - frontend_dist:/app/dist
     depends_on:
       - backend
-    command: npm run dev
+    command: npm run dev -- --host 0.0.0.0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5173"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - epms_network
 
-  # Nginx Reverse Proxy (Optional)
+  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
+    container_name: epms_nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - backend_static:/var/www/static
-      - backend_media:/var/www/media
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - backend_static:/var/www/static:ro
+      - backend_media:/var/www/media:ro
+      - frontend_dist:/var/www/frontend:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
       - backend
       - frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - epms_network
     profiles:
       - production
 
+  # Database Seeding Service (Development only)
+  seed:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: epms_seed
+    environment:
+      - DB_NAME=${POSTGRES_DB:-epms_db}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DB_HOST=db
+      - DB_PORT=5432
+    volumes:
+      - ../backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py seed_data &&
+             python manage.py create_review_cycles"
+    networks:
+      - epms_network
+    profiles:
+      - development
+
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
   backend_static:
+    driver: local
   backend_media:
+    driver: local
+  backend_logs:
+    driver: local
+  frontend_dist:
+    driver: local
+  nginx_logs:
+    driver: local
 
 networks:
-  default:
+  epms_network:
+    driver: bridge
     name: epms_network
