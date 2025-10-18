@@ -16,13 +16,15 @@ from django.contrib.auth import get_user_model
 
 from .models import (
     FeedbackRequest, FeedbackResponse, FeedbackTemplate,
-    PeerReviewer, ContentPolicyRule
+    PeerReviewer, ContentPolicyRule, ManagerFeedback
 )
 from .serializers import (
     FeedbackRequestSerializer, FeedbackRequestListSerializer,
     FeedbackResponseSerializer, FeedbackTemplateSerializer,
     PeerReviewerSerializer, ContentPolicyRuleSerializer,
-    FeedbackResponseListSerializer
+    FeedbackResponseListSerializer, ManagerFeedbackSerializer,
+    ManagerFeedbackListSerializer, ManagerFeedbackCreateSerializer,
+    ManagerFeedbackAcknowledgeSerializer
 )
 
 User = get_user_model()
@@ -591,3 +593,102 @@ def cancel_feedback_request(request, pk):
         'message': 'Feedback request cancelled successfully',
         'status': feedback_request.status
     })
+
+
+# Manager Feedback Views
+class ManagerFeedbackListView(generics.ListCreateAPIView):
+    """List and create manager feedback."""
+    
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        if self.request.method == 'GET':
+            return ManagerFeedbackListSerializer
+        return ManagerFeedbackCreateSerializer
+    
+    def get_queryset(self):
+        user = self.request.user
+        view_type = self.request.query_params.get('view', 'given')
+        
+        if view_type == 'given':
+            # Manager feedback given by the user
+            queryset = ManagerFeedback.objects.filter(manager=user)
+        elif view_type == 'received':
+            # Manager feedback received by the user
+            queryset = ManagerFeedback.objects.filter(employee=user)
+        else:
+            # Default: all feedback where user is involved
+            queryset = ManagerFeedback.objects.filter(
+                Q(manager=user) | Q(employee=user)
+            ).distinct()
+        
+        # Apply filters
+        employee_id = self.request.query_params.get('employee_id')
+        if employee_id:
+            queryset = queryset.filter(employee_id=employee_id)
+        
+        feedback_type = self.request.query_params.get('feedback_type')
+        if feedback_type:
+            queryset = queryset.filter(feedback_type=feedback_type)
+        
+        is_acknowledged = self.request.query_params.get('is_acknowledged')
+        if is_acknowledged is not None:
+            queryset = queryset.filter(is_acknowledged=is_acknowledged.lower() == 'true')
+        
+        return queryset.order_by('-created_at')
+    
+    def perform_create(self, serializer):
+        serializer.save(manager=self.request.user)
+
+
+class ManagerFeedbackDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete manager feedback."""
+    
+    serializer_class = ManagerFeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        return ManagerFeedback.objects.filter(
+            Q(manager=user) | Q(employee=user)
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Acknowledge Manager Feedback",
+    description="Allow employee to acknowledge and respond to manager feedback.",
+    responses={
+        200: ManagerFeedbackSerializer,
+        400: "Validation error",
+        401: "Authentication required",
+        404: "Feedback not found"
+    }
+)
+def acknowledge_manager_feedback(request, pk):
+    """Allow employee to acknowledge manager feedback."""
+    try:
+        feedback = get_object_or_404(
+            ManagerFeedback,
+            pk=pk,
+            employee=request.user
+        )
+        
+        serializer = ManagerFeedbackAcknowledgeSerializer(
+            feedback,
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

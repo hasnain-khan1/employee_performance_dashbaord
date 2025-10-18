@@ -517,10 +517,6 @@ class EmployeeCSVImporter:
                     
                     if user and manager:
                         user.manager = manager
-                        # Set manager role if they manage others
-                        if manager.role == 'employee':
-                            manager.role = 'manager'
-                            manager.save()
                         user.save()
             
             return True, {

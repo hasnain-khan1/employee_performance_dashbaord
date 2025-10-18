@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiTypes
 from drf_spectacular.types import OpenApiTypes
 
@@ -171,8 +172,13 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
     """Retrieve or update user profile."""
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    queryset = User.objects.all()
 
     def get_object(self):
+        # Get the user ID from the URL
+        user_id = self.kwargs.get('id')
+        if user_id:
+            return get_object_or_404(User, id=user_id)
         return self.request.user
 
 

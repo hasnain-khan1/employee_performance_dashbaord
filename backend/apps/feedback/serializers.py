@@ -7,9 +7,10 @@ requests, responses, templates, and content policy enforcement.
 
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from .models import (
     FeedbackRequest, FeedbackResponse, FeedbackTemplate,
-    PeerReviewer, ContentPolicyRule
+    PeerReviewer, ContentPolicyRule, ManagerFeedback
 )
 
 User = get_user_model()
@@ -189,3 +190,76 @@ class FeedbackResponseListSerializer(serializers.ModelSerializer):
             'id', 'reviewer', 'is_submitted', 'is_anonymous',
             'overall_rating', 'average_rating', 'submitted_at'
         ]
+
+
+# Manager Feedback Serializers
+class ManagerFeedbackSerializer(serializers.ModelSerializer):
+    """Serializer for manager feedback."""
+    
+    manager_name = serializers.SerializerMethodField()
+    employee_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ManagerFeedback
+        fields = [
+            'id', 'manager', 'employee', 'cycle', 'feedback_type',
+            'subject', 'feedback', 'strengths', 'areas_for_improvement',
+            'action_items', 'visibility', 'is_acknowledged', 'acknowledged_at',
+            'employee_response', 'created_at', 'updated_at',
+            'manager_name', 'employee_name'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'acknowledged_at']
+    
+    def get_manager_name(self, obj):
+        return obj.manager.get_full_name()
+    
+    def get_employee_name(self, obj):
+        return obj.employee.get_full_name()
+
+
+class ManagerFeedbackListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for manager feedback lists."""
+    
+    manager_name = serializers.SerializerMethodField()
+    employee_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ManagerFeedback
+        fields = [
+            'id', 'manager', 'employee', 'feedback_type', 'subject',
+            'is_acknowledged', 'created_at', 'manager_name', 'employee_name'
+        ]
+    
+    def get_manager_name(self, obj):
+        return obj.manager.get_full_name()
+    
+    def get_employee_name(self, obj):
+        return obj.employee.get_full_name()
+
+
+class ManagerFeedbackCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating manager feedback."""
+    
+    class Meta:
+        model = ManagerFeedback
+        fields = [
+            'employee', 'cycle', 'feedback_type', 'subject', 'feedback',
+            'strengths', 'areas_for_improvement', 'action_items', 'visibility'
+        ]
+    
+    def create(self, validated_data):
+        validated_data['manager'] = self.context['request'].user
+        return super().create(validated_data)
+
+
+class ManagerFeedbackAcknowledgeSerializer(serializers.ModelSerializer):
+    """Serializer for acknowledging manager feedback."""
+    
+    class Meta:
+        model = ManagerFeedback
+        fields = ['employee_response']
+    
+    def update(self, instance, validated_data):
+        instance.is_acknowledged = True
+        instance.acknowledged_at = timezone.now()
+        return super().update(instance, validated_data)

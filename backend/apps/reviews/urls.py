@@ -10,6 +10,9 @@ from . import views
 app_name = 'reviews'
 
 urlpatterns = [
+    # Root Reviews URL
+    path('', views.ReviewsListView.as_view(), name='reviews_list'),
+    
     # Self-Review URLs
     path('self/', views.SelfReviewListView.as_view(), name='self_review_list'),
     path('self/current/', views.get_current_self_review, name='current_self_review'),

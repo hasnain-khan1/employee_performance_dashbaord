@@ -18,4 +18,9 @@ urlpatterns = [
     path('<int:pk>/cancel/', views.cancel_feedback_request, name='cancel_request'),
     path('<int:pk>/reminder/', views.send_reminder, name='send_reminder'),
     
+    # Manager feedback endpoints
+    path('manager/', views.ManagerFeedbackListView.as_view(), name='manager_feedback_list'),
+    path('manager/<int:pk>/', views.ManagerFeedbackDetailView.as_view(), name='manager_feedback_detail'),
+    path('manager/<int:pk>/acknowledge/', views.acknowledge_manager_feedback, name='acknowledge_manager_feedback'),
+    
 ]

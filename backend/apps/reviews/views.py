@@ -32,6 +32,66 @@ from apps.accounts.models import User
 from apps.cycles.models import ReviewCycle
 
 
+# Root Reviews View
+class ReviewsListView(generics.ListAPIView):
+    """List all reviews based on user role and view parameter."""
+    
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        view_type = self.request.query_params.get('view', 'all')
+        
+        if view_type == 'reviewer':
+            return ManagerReviewListSerializer
+        else:
+            # Default to self-reviews for backward compatibility
+            return SelfReviewListSerializer
+    
+    def get_queryset(self):
+        user = self.request.user
+        view_type = self.request.query_params.get('view', 'all')
+        
+        if view_type == 'reviewer':
+            # Return manager reviews where user is the reviewer
+            if user.is_hr:
+                # HR can see all manager reviews
+                queryset = ManagerReview.objects.all()
+            elif user.is_manager:
+                # Managers can see their own reviews
+                queryset = ManagerReview.objects.filter(manager=user)
+            else:
+                # Employees can see reviews about them
+                queryset = ManagerReview.objects.filter(employee=user)
+        else:
+            # Default to self-reviews
+            queryset = SelfReview.objects.filter(employee=user)
+        
+        # Apply additional filters
+        cycle_id = self.request.query_params.get('cycle')
+        if cycle_id:
+            queryset = queryset.filter(cycle_id=cycle_id)
+        
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        search_query = self.request.query_params.get('search')
+        if search_query:
+            if view_type == 'reviewer':
+                queryset = queryset.filter(
+                    Q(employee__first_name__icontains=search_query) |
+                    Q(employee__last_name__icontains=search_query) |
+                    Q(employee__email__icontains=search_query)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(goal_achievement_summary__icontains=search_query) |
+                    Q(key_accomplishments__icontains=search_query)
+                )
+        
+        return queryset.order_by('-created_at')
+
+
 # Self-Review Views
 class SelfReviewListView(generics.ListCreateAPIView):
     """List and create self-reviews."""
