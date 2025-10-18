@@ -59,7 +59,7 @@
             </v-row>
 
             <v-select
-              v-if="newReport.type === 'department_performance'"
+              v-if="['performance', 'goals', 'reviews'].includes(newReport.type)"
               v-model="newReport.departmentId"
               :items="departments"
               item-title="name"
@@ -306,7 +306,7 @@ const selectedReport = ref(null)
 
 // New report form
 const newReport = ref({
-  type: 'employee_performance',
+  type: 'performance',
   format: 'pdf',
   period: 'current_month',
   startDate: '',
@@ -316,12 +316,11 @@ const newReport = ref({
 
 // Options
 const reportTypes = [
-  { title: 'Employee Performance', value: 'employee_performance' },
-  { title: 'Department Performance', value: 'department_performance' },
-  { title: 'Goals Summary', value: 'goals_summary' },
-  { title: 'Review Cycle Summary', value: 'review_cycle' },
-  { title: 'Feedback Report', value: 'feedback_report' },
-  { title: 'Attendance Report', value: 'attendance' },
+  { title: 'Performance Report', value: 'performance' },
+  { title: 'Goals Report', value: 'goals' },
+  { title: 'Feedback Report', value: 'feedback' },
+  { title: 'Reviews Report', value: 'reviews' },
+  { title: 'Analytics Report', value: 'analytics' },
   { title: 'Custom Report', value: 'custom' }
 ]
 
@@ -449,7 +448,7 @@ const generateReport = async () => {
     
     // Reset form
     newReport.value = {
-      type: 'employee_performance',
+      type: 'performance',
       format: 'pdf',
       period: 'current_month',
       startDate: '',
@@ -498,12 +497,11 @@ const deleteReport = async (report) => {
 
 const getReportDescription = (type) => {
   const descriptions = {
-    employee_performance: 'Individual employee performance metrics and ratings',
-    department_performance: 'Department-wide performance statistics and trends',
-    goals_summary: 'Overview of goal progress and completion rates',
-    review_cycle: 'Summary of review cycle completion and ratings',
-    feedback_report: 'Peer feedback statistics and trends',
-    attendance: 'Employee attendance and leave records',
+    performance: 'Individual employee performance metrics and ratings',
+    goals: 'Overview of goal progress and completion rates',
+    feedback: 'Peer feedback statistics and trends',
+    reviews: 'Summary of review cycle completion and ratings',
+    analytics: 'Comprehensive analytics and insights',
     custom: 'Custom report with selected parameters'
   }
   return descriptions[type] || 'No description available'
@@ -511,12 +509,11 @@ const getReportDescription = (type) => {
 
 const getTypeColor = (type) => {
   const colors = {
-    employee_performance: 'primary',
-    department_performance: 'blue',
-    goals_summary: 'green',
-    review_cycle: 'purple',
-    feedback_report: 'orange',
-    attendance: 'pink',
+    performance: 'primary',
+    goals: 'green',
+    feedback: 'orange',
+    reviews: 'purple',
+    analytics: 'blue',
     custom: 'grey'
   }
   return colors[type] || 'grey'
