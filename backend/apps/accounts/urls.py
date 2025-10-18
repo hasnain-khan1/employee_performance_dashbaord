@@ -9,6 +9,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
 from . import csv_views
+from . import health_views
 
 app_name = 'accounts'
 
@@ -42,4 +43,9 @@ urlpatterns = [
     path('csv/upload/', csv_views.CSVUploadValidateView.as_view(), name='csv_upload'),
     path('csv/import/', csv_views.CSVImportConfirmView.as_view(), name='csv_import'),
     path('csv/template/', csv_views.CSVTemplateDownloadView.as_view(), name='csv_template'),
+    
+    # Health check endpoints
+    path('health/', health_views.health_check, name='health_check'),
+    path('health/readiness/', health_views.readiness_check, name='readiness_check'),
+    path('health/liveness/', health_views.liveness_check, name='liveness_check'),
 ]
