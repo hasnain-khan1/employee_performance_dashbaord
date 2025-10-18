@@ -46,6 +46,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                             'email': user.email,
                             'first_name': user.first_name,
                             'last_name': user.last_name,
+                            'full_name': user.get_full_name(),
                             'role': user.role,
                             'is_hr': user.is_hr,
                             'is_manager': user.is_manager,
