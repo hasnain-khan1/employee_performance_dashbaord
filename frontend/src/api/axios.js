@@ -69,6 +69,10 @@ api.interceptors.response.use(
       toast.error('You do not have permission to perform this action.')
     } else if (error.response?.status === 404) {
       toast.error('Resource not found.')
+    } else if (error.response?.status === 400) {
+      // Handle 400 errors more gracefully - don't show generic popups
+      // Let individual components handle 400 errors with specific messages
+      console.warn('400 Bad Request:', error.response.data)
     } else if (error.response?.data?.detail) {
       toast.error(error.response.data.detail)
     } else if (error.response?.data?.message) {

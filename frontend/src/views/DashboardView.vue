@@ -548,7 +548,14 @@ const loadDashboardData = async () => {
     }
   } catch (error) {
     console.error('Error loading dashboard data:', error)
-    toast.error('Failed to load dashboard data')
+    
+    // Handle specific error cases
+    if (error.response?.status === 400) {
+      console.warn('Dashboard data not available:', error.response.data)
+      // Don't show error popup for 400 - this might be expected
+    } else {
+      toast.error('Failed to load dashboard data')
+    }
   } finally {
     loading.value = false
   }

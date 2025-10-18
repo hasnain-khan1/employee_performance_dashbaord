@@ -319,7 +319,20 @@ const loadSelfReview = async () => {
     }
   } catch (error) {
     console.error('Error loading self-review:', error)
-    toast.error('Failed to load self-review')
+    
+    // Handle specific error cases
+    if (error.response?.status === 400) {
+      const errorMessage = error.response.data?.error || 'No active review cycle or self-review found'
+      if (errorMessage.includes('No active review cycle')) {
+        toast.warning('No active review cycle found. Please contact your manager.')
+      } else if (errorMessage.includes('No current self-review')) {
+        toast.info('No self-review found for the current cycle. You may need to wait for your manager to set up the review.')
+      } else {
+        toast.error(errorMessage)
+      }
+    } else {
+      toast.error('Failed to load self-review')
+    }
   } finally {
     loading.value = false
   }

@@ -452,17 +452,23 @@ const loadDashboardData = async () => {
   } catch (error) {
     console.error('Error loading dashboard data:', error)
     
-    // Try to use cached data if available
-    const cachedData = dashboardAPI.getCachedData()
-    if (cachedData) {
-      progressData.value = cachedData.data.progress
-      actionItems.value = cachedData.data.action_items
-      recentActivity.value = cachedData.data.recent_activity
-      urgentDeadlines.value = cachedData.data.deadlines
-      lastUpdated.value = new Date(cachedData.timestamp)
-      toast.warning('Using cached data - some information may be outdated')
+    // Handle specific error cases
+    if (error.response?.status === 400) {
+      console.warn('Dashboard data not available:', error.response.data)
+      // Don't show error popup for 400 - this might be expected
     } else {
-      toast.error('Failed to load dashboard data')
+      // Try to use cached data if available
+      const cachedData = dashboardAPI.getCachedData()
+      if (cachedData) {
+        progressData.value = cachedData.data.progress
+        actionItems.value = cachedData.data.action_items
+        recentActivity.value = cachedData.data.recent_activity
+        urgentDeadlines.value = cachedData.data.deadlines
+        lastUpdated.value = new Date(cachedData.timestamp)
+        toast.warning('Using cached data - some information may be outdated')
+      } else {
+        toast.error('Failed to load dashboard data')
+      }
     }
   } finally {
     loading.value = false
@@ -494,7 +500,14 @@ const refreshActivity = async () => {
     toast.success('Dashboard refreshed')
   } catch (error) {
     console.error('Error refreshing dashboard:', error)
-    toast.error('Failed to refresh dashboard')
+    
+    // Handle specific error cases
+    if (error.response?.status === 400) {
+      console.warn('Dashboard refresh failed - data not available:', error.response.data)
+      toast.warning('Dashboard data not available')
+    } else {
+      toast.error('Failed to refresh dashboard')
+    }
   } finally {
     refreshingActivity.value = false
   }
