@@ -195,7 +195,7 @@ class EvidenceLinkView(generics.ListCreateAPIView):
     description="Get the current active self-review for the logged-in user.",
     responses={
         200: SelfReviewSerializer,
-        404: "No current self-review found",
+        400: "No active review cycle found or no current self-review found",
         401: "Authentication required"
     }
 )
@@ -208,7 +208,7 @@ def get_current_self_review(request):
         if not current_cycle:
             return Response(
                 {'error': 'No active review cycle found'},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # Get the current self-review for the user in the active cycle
@@ -220,7 +220,7 @@ def get_current_self_review(request):
         if not self_review:
             return Response(
                 {'error': 'No current self-review found for this cycle'},
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         serializer = SelfReviewSerializer(self_review, context={'request': request})
