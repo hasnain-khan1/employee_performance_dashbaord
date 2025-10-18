@@ -5,27 +5,27 @@
       <v-col cols="12">
         <div class="dashboard-header">
           <div class="header-content">
-            <div class="welcome-section">
-              <h1 class="dashboard-title">
-                <v-icon size="32" color="primary" class="mr-3">mdi-view-dashboard</v-icon>
-                Dashboard
-              </h1>
-              <p class="welcome-text">
-                Welcome back, <span class="user-name">{{ user?.full_name || 'User' }}</span>!
-              </p>
-              <p class="date-text">{{ currentDate }}</p>
+            <!-- Logo/Brand Section -->
+            <div class="brand-section">
+              <h1 class="dashboard-title">Performance Hub</h1>
             </div>
-            <v-btn
-              color="primary"
-              prepend-icon="mdi-refresh"
-              @click="refreshDashboard"
-              :loading="loading"
-              class="refresh-btn"
-              size="large"
-              rounded="lg"
-            >
-              Refresh
-            </v-btn>
+            
+            <!-- User Profile Section -->
+            <div class="user-profile-section">
+              <div class="user-info">
+                <img 
+                  :src="user?.avatar || 'https://placehold.co/32x32'" 
+                  :alt="user?.full_name || 'User'"
+                  class="user-avatar"
+                />
+                <div class="user-details">
+                  <div class="user-name">{{ user?.full_name || 'User' }}</div>
+                  <div class="user-role" :class="getRoleClass(user?.role)">
+                    {{ getUserRoleLabel(user?.role) }}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </v-col>
@@ -567,6 +567,27 @@ const refreshDashboard = async () => {
   toast.success('Dashboard refreshed')
 }
 
+// User role methods
+const getUserRoleLabel = (role) => {
+  const roleLabels = {
+    'employee': 'Employee',
+    'manager': 'Manager', 
+    'hr': 'HR',
+    'admin': 'Admin'
+  }
+  return roleLabels[role] || 'Employee'
+}
+
+const getRoleClass = (role) => {
+  const roleClasses = {
+    'employee': 'role-employee',
+    'manager': 'role-manager',
+    'hr': 'role-hr', 
+    'admin': 'role-admin'
+  }
+  return roleClasses[role] || 'role-employee'
+}
+
 const getGoalStatusColor = (status) => {
   const colors = {
     draft: 'grey',
@@ -648,33 +669,36 @@ onMounted(() => {
 
 /* Header Styling */
 .dashboard-header {
-  background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
-  border-radius: 20px;
-  padding: 32px;
-  margin-bottom: 32px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: white;
+  border-bottom: 1px solid #E5E7EB;
+  padding: 0;
+  margin-bottom: 0;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 24px;
+  padding: 0 80px;
+  height: 64px;
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
-.welcome-section {
-  flex: 1;
+.brand-section {
+  display: flex;
+  align-items: center;
 }
 
 .dashboard-title {
-  font-size: 2.5rem;
+  font-size: 20px;
   font-weight: 700;
-  color: #0F172A;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
+  color: #111827;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
 }
 
 .welcome-text {
@@ -692,6 +716,70 @@ onMounted(() => {
   font-size: 0.875rem;
   color: #94A3B8;
   margin: 0;
+}
+
+/* User Profile Section */
+.user-profile-section {
+  display: flex;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  font-family: 'Inter', sans-serif;
+  line-height: 20px;
+}
+
+.user-role {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 400;
+  font-family: 'Inter', sans-serif;
+  line-height: 16px;
+  text-align: center;
+}
+
+.role-employee {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.role-manager {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.role-hr {
+  background: #DCFCE7;
+  color: #16A34A;
+}
+
+.role-admin {
+  background: #F3E8FF;
+  color: #9333EA;
 }
 
 .refresh-btn {
@@ -846,17 +934,35 @@ onMounted(() => {
   }
   
   .dashboard-header {
-    padding: 24px;
-    margin-bottom: 24px;
+    padding: 0;
+    margin-bottom: 0;
   }
   
   .header-content {
-    flex-direction: column;
-    align-items: flex-start;
+    padding: 0 24px;
+    height: 56px;
   }
   
   .dashboard-title {
-    font-size: 2rem;
+    font-size: 18px;
+  }
+  
+  .user-info {
+    gap: 8px;
+  }
+  
+  .user-avatar {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .user-name {
+    font-size: 13px;
+  }
+  
+  .user-role {
+    font-size: 11px;
+    padding: 3px 6px;
   }
   
   .stat-content {
