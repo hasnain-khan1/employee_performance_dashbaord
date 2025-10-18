@@ -20,7 +20,7 @@ from .serializers import (
     MetricSerializer, MetricListSerializer
 )
 from apps.goals.models import Goal
-from apps.reviews.models import Review
+from apps.reviews.models import ManagerReview
 from apps.feedback.models import FeedbackRequest, FeedbackResponse
 from apps.cycles.models import ReviewCycle
 from apps.accounts.models import User
@@ -478,13 +478,13 @@ def dashboard_stats(request):
     active_goals = Goal.objects.filter(employee=user, status='in_progress').count()
     
     # Get pending reviews count
-    pending_reviews = Review.objects.filter(
-        Q(employee=user, status__in=['pending', 'in_progress']) |
-        Q(reviewer=user, status__in=['pending', 'in_progress'])
+    pending_reviews = ManagerReview.objects.filter(
+        Q(employee=user, status__in=['draft', 'in_progress']) |
+        Q(manager=user, status__in=['draft', 'in_progress'])
     ).count()
     
     # Get feedback received count
-    feedback_received = FeedbackRequest.objects.filter(recipient=user).count()
+    feedback_received = FeedbackRequest.objects.filter(requester=user).count()
     
     # Calculate completion rate
     total_goals = Goal.objects.filter(employee=user).count()
@@ -535,7 +535,7 @@ def employee_dashboard_stats(request):
         
         if Goal.objects.filter(employee=user, created_at__gte=current_cycle.start_date).exists():
             completed_tasks += 1
-        if Review.objects.filter(employee=user, cycle=current_cycle, review_type='self_review', status='completed').exists():
+        if ManagerReview.objects.filter(employee=user, cycle=current_cycle, status='approved').exists():
             completed_tasks += 1
             
         completion = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
@@ -555,7 +555,7 @@ def employee_dashboard_stats(request):
         'stats': {
             'total_goals': Goal.objects.filter(employee=user).count(),
             'completed_goals': Goal.objects.filter(employee=user, status='completed').count(),
-            'feedback_count': FeedbackRequest.objects.filter(recipient=user).count()
+            'feedback_count': FeedbackRequest.objects.filter(requester=user).count()
         }
     })
 
@@ -581,26 +581,24 @@ def manager_dashboard_stats(request):
     completed_goals = team_goals.filter(status='completed').count()
     
     # Get pending reviews for team
-    pending_reviews = Review.objects.filter(
+    pending_reviews = ManagerReview.objects.filter(
         employee__in=team_members,
-        reviewer=user,
-        status__in=['pending', 'in_progress']
-    ).select_related('employee', 'cycle')[:10]
+        manager=user,
+        status__in=['draft', 'in_progress']
+    ).select_related('employee')[:10]
     
     reviews_data = [{
         'id': r.id,
         'employee_name': r.employee.full_name,
         'employee_id': r.employee.id,
-        'review_type': r.review_type,
-        'status': r.status,
-        'cycle': r.cycle.name if r.cycle else None
+        'status': r.status
     } for r in pending_reviews]
     
     # Calculate average team rating
-    completed_reviews = Review.objects.filter(
+    completed_reviews = ManagerReview.objects.filter(
         employee__in=team_members,
-        reviewer=user,
-        status='completed',
+        manager=user,
+        status='approved',
         overall_rating__isnull=False
     )
     avg_rating = completed_reviews.aggregate(Avg('overall_rating'))['overall_rating__avg'] or 0
@@ -638,10 +636,10 @@ def hr_dashboard_stats(request):
     active_cycles = ReviewCycle.objects.filter(status='active').count()
     
     # Completed reviews
-    completed_reviews = Review.objects.filter(status='completed').count()
+    completed_reviews = ManagerReview.objects.filter(status='approved').count()
     
     # Pending feedback/actions
-    pending_feedback = FeedbackRequest.objects.filter(status='pending').count()
+    pending_feedback = FeedbackRequest.objects.filter(status__in=['sent', 'in_progress']).count()
     
     # Department performance
     from apps.org.models import Department
@@ -657,9 +655,9 @@ def hr_dashboard_stats(request):
         completed = dept_goals.filter(status='completed').count()
         total = dept_goals.count()
         
-        dept_reviews = Review.objects.filter(
+        dept_reviews = ManagerReview.objects.filter(
             employee__in=dept_employees,
-            status='completed',
+            status='approved',
             overall_rating__isnull=False
         )
         avg_rating = dept_reviews.aggregate(Avg('overall_rating'))['overall_rating__avg'] or 0
@@ -673,8 +671,8 @@ def hr_dashboard_stats(request):
         })
     
     # Recent activity
-    recent_reviews = Review.objects.filter(
-        status='completed'
+    recent_reviews = ManagerReview.objects.filter(
+        status='approved'
     ).order_by('-submitted_at').select_related('employee')[:5]
     
     recent_goals = Goal.objects.filter(
@@ -687,7 +685,7 @@ def hr_dashboard_stats(request):
         activity_data.append({
             'id': review.id,
             'type': 'review',
-            'description': f"{review.employee.full_name} completed {review.review_type.replace('_', ' ')}",
+            'description': f"{review.employee.full_name} completed manager review",
             'timestamp': review.submitted_at.isoformat() if review.submitted_at else None,
             'color': 'green'
         })
@@ -736,8 +734,8 @@ def hr_dashboard_stats(request):
         })
     
     # Check for low performance
-    low_performers = Review.objects.filter(
-        status='completed',
+    low_performers = ManagerReview.objects.filter(
+        status='approved',
         overall_rating__lt=2.5,
         submitted_at__gte=timezone.now() - timedelta(days=90)
     ).values('employee').distinct().count()

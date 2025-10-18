@@ -10,9 +10,13 @@ import DashboardView from '@/views/DashboardView.vue'
 import EmployeeGoalsView from '@/views/Employee/GoalsView.vue'
 import EmployeeSelfReviewView from '@/views/Employee/SelfReviewView.vue'
 import EmployeeFeedbackView from '@/views/Employee/FeedbackView.vue'
+import EmployeePeerFeedbackView from '@/views/Employee/PeerFeedbackView.vue'
+import EmployeePerformanceDashboard from '@/views/Employee/PerformanceDashboard.vue'
 
 // Manager views
 import ManagerTeamGoalsView from '@/views/Manager/TeamGoalsView.vue'
+import ManagerGoalsDashboard from '@/views/Manager/GoalsDashboard.vue'
+import ManagerReviewDashboard from '@/views/Manager/ManagerReviewDashboard.vue'
 import ManagerTeamReviewsView from '@/views/Manager/TeamReviewsView.vue'
 import ManagerFeedbackRequestsView from '@/views/Manager/FeedbackRequestsView.vue'
 import ManagerTeamFeedbackView from '@/views/Manager/TeamFeedbackView.vue'
@@ -75,11 +79,35 @@ const routes = [
     component: EmployeeFeedbackView,
     meta: { requiresAuth: true, role: 'employee' }
   },
+  {
+    path: '/employee/peer-feedback',
+    name: 'EmployeePeerFeedback',
+    component: EmployeePeerFeedbackView,
+    meta: { requiresAuth: true, role: 'employee' }
+  },
+  {
+    path: '/employee/performance-dashboard',
+    name: 'EmployeePerformanceDashboard',
+    component: EmployeePerformanceDashboard,
+    meta: { requiresAuth: true, role: 'employee' }
+  },
   // Manager routes
   {
     path: '/manager/team-goals',
     name: 'ManagerTeamGoals',
     component: ManagerTeamGoalsView,
+    meta: { requiresAuth: true, role: 'manager' }
+  },
+  {
+    path: '/manager/goals-dashboard',
+    name: 'ManagerGoalsDashboard',
+    component: ManagerGoalsDashboard,
+    meta: { requiresAuth: true, role: 'manager' }
+  },
+  {
+    path: '/manager/review-dashboard',
+    name: 'ManagerReviewDashboard',
+    component: ManagerReviewDashboard,
     meta: { requiresAuth: true, role: 'manager' }
   },
   {

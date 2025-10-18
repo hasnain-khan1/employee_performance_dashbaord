@@ -1,31 +1,38 @@
 """
 Views for the feedback app.
 
-This module contains API views for feedback request and response management.
+This module contains API views for peer feedback system including
+request management, response collection, and content policy enforcement.
 """
 
-from rest_framework import generics, status, permissions
+from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from django.db.models import Q
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 
-from .models import FeedbackRequest, FeedbackResponse, FeedbackTemplate, ManagerFeedback
+from .models import (
+    FeedbackRequest, FeedbackResponse, FeedbackTemplate,
+    PeerReviewer, ContentPolicyRule
+)
 from .serializers import (
     FeedbackRequestSerializer, FeedbackRequestListSerializer,
     FeedbackResponseSerializer, FeedbackTemplateSerializer,
-    FeedbackTemplateListSerializer, ManagerFeedbackSerializer,
-    ManagerFeedbackListSerializer
+    PeerReviewerSerializer, ContentPolicyRuleSerializer,
+    FeedbackResponseListSerializer
 )
+
+User = get_user_model()
 
 
 class FeedbackRequestListView(generics.ListCreateAPIView):
     """
     Feedback request list and creation endpoint.
     
-    Provides list of feedback requests with filtering,
+    Provides list of peer feedback requests with filtering,
     and allows creation of new feedback requests.
     """
     
@@ -40,21 +47,20 @@ class FeedbackRequestListView(generics.ListCreateAPIView):
     def get_queryset(self):
         """Get filtered queryset of feedback requests."""
         user = self.request.user
-        queryset = FeedbackRequest.objects.select_related(
-            'requester', 'recipient', 'cycle'
-        )
+        queryset = FeedbackRequest.objects.select_related('requester', 'cycle')
         
         # Filter based on user role
         view_type = self.request.query_params.get('view')
         if view_type == 'sent':
             queryset = queryset.filter(requester=user)
         elif view_type == 'received':
-            queryset = queryset.filter(recipient=user)
+            # Show requests where user is a peer reviewer
+            queryset = queryset.filter(peer_reviewers__reviewer=user)
         else:
             # Default: show all requests where user is involved
             queryset = queryset.filter(
-                Q(requester=user) | Q(recipient=user)
-            )
+                Q(requester=user) | Q(peer_reviewers__reviewer=user)
+            ).distinct()
         
         # Filter by status
         status_filter = self.request.query_params.get('status')
@@ -74,7 +80,7 @@ class FeedbackRequestListView(generics.ListCreateAPIView):
     
     @extend_schema(
         summary="List Feedback Requests",
-        description="Get a list of feedback requests with optional filtering.",
+        description="Get a list of peer feedback requests with optional filtering.",
         parameters=[
             OpenApiParameter(
                 name='view',
@@ -106,7 +112,7 @@ class FeedbackRequestListView(generics.ListCreateAPIView):
     
     @extend_schema(
         summary="Create Feedback Request",
-        description="Create a new feedback request.",
+        description="Create a new peer feedback request.",
         responses={
             201: FeedbackRequestSerializer,
             400: "Validation error",
@@ -134,8 +140,8 @@ class FeedbackRequestDetailView(generics.RetrieveUpdateAPIView):
         """Get queryset filtered by user involvement."""
         user = self.request.user
         return FeedbackRequest.objects.filter(
-            Q(requester=user) | Q(recipient=user)
-        )
+            Q(requester=user) | Q(peer_reviewers__reviewer=user)
+        ).distinct()
     
     @extend_schema(
         summary="Get Feedback Request Details",
@@ -169,7 +175,7 @@ class FeedbackResponseCreateView(generics.CreateAPIView):
     """
     Feedback response creation endpoint.
     
-    Allows recipients to submit feedback responses.
+    Allows peer reviewers to submit feedback responses.
     """
     
     serializer_class = FeedbackResponseSerializer
@@ -177,7 +183,7 @@ class FeedbackResponseCreateView(generics.CreateAPIView):
     
     @extend_schema(
         summary="Submit Feedback Response",
-        description="Submit a feedback response to a request.",
+        description="Submit a feedback response to a peer review request.",
         responses={
             201: FeedbackResponseSerializer,
             400: "Validation error",
@@ -186,18 +192,7 @@ class FeedbackResponseCreateView(generics.CreateAPIView):
     )
     def post(self, request, *args, **kwargs):
         """Submit feedback response."""
-        response = super().post(request, *args, **kwargs)
-        
-        # Update the request status to completed
-        if response.status_code == status.HTTP_201_CREATED:
-            request_id = request.data.get('request_id')
-            if request_id:
-                feedback_request = FeedbackRequest.objects.get(id=request_id)
-                feedback_request.status = 'completed'
-                feedback_request.submitted_at = timezone.now()
-                feedback_request.save()
-        
-        return response
+        return super().post(request, *args, **kwargs)
 
 
 class FeedbackTemplateListView(generics.ListCreateAPIView):
@@ -209,12 +204,7 @@ class FeedbackTemplateListView(generics.ListCreateAPIView):
     """
     
     permission_classes = [permissions.IsAuthenticated]
-    
-    def get_serializer_class(self):
-        """Return appropriate serializer based on request method."""
-        if self.request.method == 'GET':
-            return FeedbackTemplateListSerializer
-        return FeedbackTemplateSerializer
+    serializer_class = FeedbackTemplateSerializer
     
     def get_queryset(self):
         """Get queryset of active feedback templates."""
@@ -239,7 +229,7 @@ class FeedbackTemplateListView(generics.ListCreateAPIView):
             ),
         ],
         responses={
-            200: FeedbackTemplateListSerializer(many=True),
+            200: FeedbackTemplateSerializer(many=True),
             401: "Authentication required"
         }
     )
@@ -268,259 +258,336 @@ class FeedbackTemplateListView(generics.ListCreateAPIView):
         return super().post(request, *args, **kwargs)
 
 
-class FeedbackTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    Feedback template detail endpoint.
-    
-    Provides detailed information about a specific template
-    and allows updates (HR only).
-    """
-    
-    serializer_class = FeedbackTemplateSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    queryset = FeedbackTemplate.objects.all()
-    lookup_field = 'pk'
-    
-    @extend_schema(
-        summary="Get Feedback Template Details",
-        description="Retrieve detailed information about a specific feedback template.",
-        responses={
-            200: FeedbackTemplateSerializer,
-            404: "Template not found",
-            401: "Authentication required"
-        }
-    )
-    def get(self, request, *args, **kwargs):
-        """Get feedback template details."""
-        return super().get(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Update Feedback Template",
-        description="Update a feedback template (HR only).",
-        responses={
-            200: FeedbackTemplateSerializer,
-            400: "Validation error",
-            404: "Template not found",
-            401: "Authentication required",
-            403: "Permission denied"
-        }
-    )
-    def patch(self, request, *args, **kwargs):
-        """Update feedback template."""
-        if not request.user.is_hr:
-            return Response(
-                {'error': 'Only HR can update feedback templates'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().patch(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Delete Feedback Template",
-        description="Delete a feedback template (HR only).",
-        responses={
-            204: "Template deleted",
-            404: "Template not found",
-            401: "Authentication required",
-            403: "Permission denied"
-        }
-    )
-    def delete(self, request, *args, **kwargs):
-        """Delete feedback template."""
-        if not request.user.is_hr:
-            return Response(
-                {'error': 'Only HR can delete feedback templates'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().delete(request, *args, **kwargs)
+# Peer Selection and Management Views
 
-
-class ManagerFeedbackListView(generics.ListCreateAPIView):
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Get Available Peers",
+    description="Get list of colleagues available for peer feedback selection.",
+    parameters=[
+        OpenApiParameter(
+            name='department',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Filter by department'
+        ),
+        OpenApiParameter(
+            name='search',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Search by name or email'
+        ),
+    ],
+    responses={
+        200: "List of available peers",
+        401: "Authentication required"
+    }
+)
+def get_available_peers(request):
     """
-    Manager feedback list and creation endpoint.
-    
-    Allows managers to provide feedback to their direct reports
-    and employees to view feedback received from their managers.
+    Get list of colleagues available for peer feedback selection.
     """
+    user = request.user
     
-    permission_classes = [permissions.IsAuthenticated]
+    # Get all users except the current user
+    queryset = User.objects.exclude(id=user.id).filter(is_active=True)
     
-    def get_serializer_class(self):
-        """Return appropriate serializer based on request method."""
-        if self.request.method == 'GET':
-            return ManagerFeedbackListSerializer
-        return ManagerFeedbackSerializer
+    # Filter by department
+    department = request.query_params.get('department')
+    if department:
+        queryset = queryset.filter(department=department)
     
-    def get_queryset(self):
-        """Get filtered queryset of manager feedback."""
-        user = self.request.user
-        queryset = ManagerFeedback.objects.select_related(
-            'manager', 'employee', 'cycle'
-        )
-        
-        # Filter based on user role
-        view_type = self.request.query_params.get('view')
-        if view_type == 'given':
-            # Manager view: feedback they've given
-            queryset = queryset.filter(manager=user)
-        elif view_type == 'received':
-            # Employee view: feedback they've received
-            queryset = queryset.filter(employee=user)
-        else:
-            # Default: show feedback where user is involved
-            queryset = queryset.filter(
-                Q(manager=user) | Q(employee=user)
-            )
-        
-        # Filter by employee (for managers viewing specific employee)
-        employee_id = self.request.query_params.get('employee_id')
-        if employee_id:
-            queryset = queryset.filter(employee_id=employee_id)
-        
-        # Filter by feedback type
-        feedback_type = self.request.query_params.get('feedback_type')
-        if feedback_type:
-            queryset = queryset.filter(feedback_type=feedback_type)
-        
-        # Filter by acknowledgment status
-        is_acknowledged = self.request.query_params.get('is_acknowledged')
-        if is_acknowledged is not None:
-            queryset = queryset.filter(is_acknowledged=is_acknowledged.lower() == 'true')
-        
-        # Filter by cycle
-        cycle = self.request.query_params.get('cycle')
-        if cycle:
-            queryset = queryset.filter(cycle_id=cycle)
-        
-        return queryset.order_by('-created_at')
-    
-    @extend_schema(
-        summary="List Manager Feedback",
-        description="Get a list of manager feedback with optional filtering.",
-        parameters=[
-            OpenApiParameter(
-                name='view',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Filter by view type: "given" or "received"'
-            ),
-            OpenApiParameter(
-                name='employee_id',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Filter by employee ID'
-            ),
-            OpenApiParameter(
-                name='feedback_type',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Filter by feedback type'
-            ),
-            OpenApiParameter(
-                name='is_acknowledged',
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                description='Filter by acknowledgment status'
-            ),
-            OpenApiParameter(
-                name='cycle',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Filter by cycle ID'
-            ),
-        ],
-        responses={
-            200: ManagerFeedbackListSerializer(many=True),
-            401: "Authentication required"
-        }
-    )
-    def get(self, request, *args, **kwargs):
-        """Get list of manager feedback."""
-        return super().get(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Create Manager Feedback",
-        description="Create new feedback for a direct report (Managers only).",
-        responses={
-            201: ManagerFeedbackSerializer,
-            400: "Validation error",
-            401: "Authentication required"
-        }
-    )
-    def post(self, request, *args, **kwargs):
-        """Create new manager feedback."""
-        return super().post(request, *args, **kwargs)
-
-
-class ManagerFeedbackDetailView(generics.RetrieveUpdateAPIView):
-    """
-    Manager feedback detail endpoint.
-    
-    Provides detailed information about a specific feedback
-    and allows employees to acknowledge and respond.
-    """
-    
-    serializer_class = ManagerFeedbackSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    lookup_field = 'pk'
-    
-    def get_queryset(self):
-        """Get queryset filtered by user involvement."""
-        user = self.request.user
-        return ManagerFeedback.objects.filter(
-            Q(manager=user) | Q(employee=user)
+    # Search by name or email
+    search = request.query_params.get('search')
+    if search:
+        queryset = queryset.filter(
+            Q(first_name__icontains=search) |
+            Q(last_name__icontains=search) |
+            Q(email__icontains=search)
         )
     
-    @extend_schema(
-        summary="Get Manager Feedback Details",
-        description="Retrieve detailed information about a specific feedback.",
-        responses={
-            200: ManagerFeedbackSerializer,
-            404: "Feedback not found",
-            401: "Authentication required"
-        }
-    )
-    def get(self, request, *args, **kwargs):
-        """Get feedback details."""
-        return super().get(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Update Manager Feedback",
-        description="Update feedback (manager) or acknowledge/respond (employee).",
-        responses={
-            200: ManagerFeedbackSerializer,
-            400: "Validation error",
-            404: "Feedback not found",
-            401: "Authentication required"
-        }
-    )
-    def patch(self, request, *args, **kwargs):
-        """Update feedback."""
-        return super().patch(request, *args, **kwargs)
+    # Serialize and return
+    from .serializers import UserListSerializer
+    serializer = UserListSerializer(queryset[:50], many=True)  # Limit to 50 results
+    return Response(serializer.data)
 
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-def acknowledge_feedback(request, pk):
+@extend_schema(
+    summary="Create Peer Feedback Request",
+    description="Create a new peer feedback request with selected reviewers.",
+    responses={
+        201: FeedbackRequestSerializer,
+        400: "Validation error",
+        401: "Authentication required"
+    }
+)
+def create_peer_feedback_request(request):
     """
-    Employee acknowledges receiving feedback.
+    Create a new peer feedback request with selected reviewers.
+    """
+    # Validate required fields
+    title = request.data.get('title')
+    deadline = request.data.get('deadline')
+    peer_reviewer_ids = request.data.get('peer_reviewer_ids', [])
     
-    Allows employees to mark feedback as acknowledged and
-    optionally provide a response.
-    """
-    try:
-        feedback = ManagerFeedback.objects.get(
-            pk=pk,
-            employee=request.user
-        )
-    except ManagerFeedback.DoesNotExist:
+    if not title:
         return Response(
-            {'error': 'Feedback not found'},
+            {'error': 'Title is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not deadline:
+        return Response(
+            {'error': 'Deadline is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if not peer_reviewer_ids:
+        return Response(
+            {'error': 'At least one peer reviewer is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Validate peer count (1-5)
+    if len(peer_reviewer_ids) < 1 or len(peer_reviewer_ids) > 5:
+        return Response(
+            {'error': 'Must select between 1 and 5 peer reviewers'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Get or create active cycle
+    from apps.cycles.models import ReviewCycle
+    cycle = ReviewCycle.objects.filter(is_active=True).first()
+    if not cycle:
+        return Response(
+            {'error': 'No active review cycle found'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Create feedback request
+    feedback_request = FeedbackRequest.objects.create(
+        requester=request.user,
+        cycle=cycle,
+        title=title,
+        description=request.data.get('description', ''),
+        deadline=deadline,
+        allow_anonymous=request.data.get('allow_anonymous', True),
+        min_peers=1,
+        max_peers=5
+    )
+    
+    # Create peer reviewers
+    for reviewer_id in peer_reviewer_ids:
+        try:
+            reviewer = User.objects.get(id=reviewer_id)
+            PeerReviewer.objects.create(
+                feedback_request=feedback_request,
+                reviewer=reviewer,
+                relationship_context=request.data.get('relationship_context', ''),
+                personal_message=request.data.get('personal_message', '')
+            )
+        except User.DoesNotExist:
+            continue
+    
+    # Update status to sent
+    feedback_request.status = 'sent'
+    feedback_request.save()
+    
+    serializer = FeedbackRequestSerializer(feedback_request)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+# Content Policy Enforcement
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Validate Content Policy",
+    description="Validate feedback content against policy rules.",
+    responses={
+        200: "Content validation results",
+        401: "Authentication required"
+    }
+)
+def validate_content_policy(request):
+    """
+    Validate feedback content against content policy rules.
+    """
+    content = request.data.get('content', '')
+    violations = []
+    
+    # Get active content policy rules
+    rules = ContentPolicyRule.objects.filter(is_active=True)
+    
+    for rule in rules:
+        rule_violations = []
+        
+        # Check keywords
+        for keyword in rule.keywords:
+            if keyword.lower() in content.lower():
+                rule_violations.append(f"Contains flagged keyword: {keyword}")
+        
+        # Check patterns (basic implementation)
+        for pattern in rule.patterns:
+            if pattern in content:
+                rule_violations.append(f"Matches flagged pattern: {pattern}")
+        
+        # Check length requirements
+        if rule.min_length and len(content) < rule.min_length:
+            rule_violations.append(f"Content too short (minimum {rule.min_length} characters)")
+        
+        if rule.max_length and len(content) > rule.max_length:
+            rule_violations.append(f"Content too long (maximum {rule.max_length} characters)")
+        
+        if rule_violations:
+            violations.append({
+                'rule_name': rule.name,
+                'rule_type': rule.rule_type,
+                'severity': rule.severity,
+                'violations': rule_violations,
+                'warning_message': rule.warning_message,
+                'auto_block': rule.auto_block
+            })
+    
+    # Determine if content should be blocked
+    critical_violations = [v for v in violations if v['severity'] == 'critical']
+    auto_block_violations = [v for v in violations if v['auto_block']]
+    
+    should_block = len(critical_violations) > 0 or len(auto_block_violations) > 0
+    
+    return Response({
+        'violations': violations,
+        'should_block': should_block,
+        'is_valid': len(violations) == 0
+    })
+
+
+# Automated Reminder System
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Send Reminder",
+    description="Send reminder to peer reviewers (HR/Manager only).",
+    responses={
+        200: "Reminder sent successfully",
+        401: "Authentication required",
+        403: "Permission denied"
+    }
+)
+def send_reminder(request, peer_reviewer_id):
+    """
+    Send reminder to a specific peer reviewer.
+    """
+    # Check if user is HR or manager
+    if not (request.user.is_hr or request.user.is_manager):
+        return Response(
+            {'error': 'Only HR or managers can send reminders'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        peer_reviewer = PeerReviewer.objects.get(id=peer_reviewer_id)
+    except PeerReviewer.DoesNotExist:
+        return Response(
+            {'error': 'Peer reviewer not found'},
             status=status.HTTP_404_NOT_FOUND
         )
     
-    employee_response = request.data.get('employee_response', '')
-    feedback.acknowledge(response=employee_response)
+    # Update reminder tracking
+    peer_reviewer.reminder_sent_count += 1
+    peer_reviewer.last_reminder_sent = timezone.now()
+    peer_reviewer.save()
     
-    serializer = ManagerFeedbackSerializer(feedback)
-    return Response(serializer.data)
+    # TODO: Send actual email notification
+    # This would integrate with your email service
+    
+    return Response({
+        'message': 'Reminder sent successfully',
+        'reminder_count': peer_reviewer.reminder_sent_count
+    })
 
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Get Feedback Statistics",
+    description="Get statistics for feedback requests and responses.",
+    responses={
+        200: "Feedback statistics",
+        401: "Authentication required"
+    }
+)
+def get_feedback_statistics(request):
+    """
+    Get statistics for feedback requests and responses.
+    """
+    user = request.user
+    
+    # Get user's feedback requests
+    sent_requests = FeedbackRequest.objects.filter(requester=user)
+    received_requests = FeedbackRequest.objects.filter(peer_reviewers__reviewer=user)
+    
+    # Calculate statistics
+    stats = {
+        'sent_requests': {
+            'total': sent_requests.count(),
+            'completed': sent_requests.filter(status='completed').count(),
+            'in_progress': sent_requests.filter(status='in_progress').count(),
+            'expired': sent_requests.filter(status='expired').count()
+        },
+        'received_requests': {
+            'total': received_requests.count(),
+            'completed': received_requests.filter(peer_reviewers__status='completed').count(),
+            'pending': received_requests.filter(peer_reviewers__status='pending').count(),
+            'overdue': received_requests.filter(
+                peer_reviewers__status__in=['pending', 'in_progress'],
+                deadline__lt=timezone.now()
+            ).count()
+        }
+    }
+    
+    return Response(stats)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Cancel Feedback Request",
+    description="Cancel a feedback request (requester only).",
+    responses={
+        200: "Request cancelled successfully",
+        401: "Authentication required",
+        404: "Request not found",
+        403: "Permission denied"
+    }
+)
+def cancel_feedback_request(request, pk):
+    """
+    Cancel a feedback request.
+    """
+    try:
+        feedback_request = FeedbackRequest.objects.get(pk=pk, requester=request.user)
+    except FeedbackRequest.DoesNotExist:
+        return Response(
+            {'error': 'Feedback request not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Only allow cancellation if not completed
+    if feedback_request.status == 'completed':
+        return Response(
+            {'error': 'Cannot cancel completed feedback request'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    feedback_request.status = 'cancelled'
+    feedback_request.save()
+    
+    return Response({
+        'message': 'Feedback request cancelled successfully',
+        'status': feedback_request.status
+    })

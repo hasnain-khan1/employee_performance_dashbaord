@@ -33,6 +33,11 @@ urlpatterns = [
     path('change-password/', views.ChangePasswordView.as_view(), name='change_password'),
     path('reset-password/', views.PasswordResetView.as_view(), name='reset_password'),
     
+    # Employee Dashboard endpoints
+    path('dashboard/', views.get_employee_dashboard_data, name='employee_dashboard'),
+    path('dashboard/progress/', views.get_employee_progress_summary, name='employee_progress'),
+    path('dashboard/action-items/', views.get_employee_action_items, name='employee_action_items'),
+    
     # CSV Import endpoints
     path('csv/upload/', csv_views.CSVUploadValidateView.as_view(), name='csv_upload'),
     path('csv/import/', csv_views.CSVImportConfirmView.as_view(), name='csv_import'),

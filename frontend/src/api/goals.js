@@ -21,4 +21,10 @@ export const goalsAPI = {
   // Goal approval
   approveGoal: (id, data) => api.post(`/goals/${id}/approve/`, data),
   rejectGoal: (id, data) => api.post(`/goals/${id}/reject/`, data),
+  
+  // Manager-specific endpoints
+  getManagerGoals: (params = {}) => api.get('/goals/manager/team/', { params }),
+  submitGoalReview: (goalId, data) => api.post(`/goals/${goalId}/review/`, data),
+  getGoalHistory: (goalId) => api.get(`/goals/${goalId}/history/`),
+  submitBulkFeedback: (data) => api.post('/goals/bulk-feedback/', data),
 }

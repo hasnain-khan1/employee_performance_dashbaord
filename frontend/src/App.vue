@@ -128,6 +128,11 @@ const navigationItems = computed(() => {
   if (user.value?.role === 'employee') {
     items.push(
       {
+        title: 'Performance Dashboard',
+        icon: 'mdi-view-dashboard',
+        to: '/employee/performance-dashboard'
+      },
+      {
         title: 'My Goals',
         icon: 'mdi-target',
         to: '/employee/goals'
@@ -151,6 +156,11 @@ const navigationItems = computed(() => {
         title: 'Team Goals',
         icon: 'mdi-account-group',
         to: '/manager/team-goals'
+      },
+      {
+        title: 'Final Reviews',
+        icon: 'mdi-clipboard-check',
+        to: '/manager/review-dashboard'
       },
       {
         title: 'Team Reviews',

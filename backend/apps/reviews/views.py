@@ -1,334 +1,673 @@
 """
 Views for the reviews app.
 
-This module contains API views for performance review management.
+This module contains views for self-review and manager review management,
+including comprehensive performance evaluation capabilities.
 """
 
-from rest_framework import generics, status, permissions
+from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter
-from drf_spectacular.types import OpenApiTypes
-from django.db.models import Q
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from django.db.models import Q, Avg
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema, OpenApiTypes
+from drf_spectacular.types import OpenApiTypes
 
-from .models import Review, ReviewSection, ReviewTemplate
-from .serializers import (
-    ReviewSerializer, ReviewListSerializer,
-    ReviewSectionSerializer, ReviewTemplateSerializer,
-    ReviewTemplateListSerializer
+from .models import (
+    SelfReview, ManagerReview, ReviewAttachment, ReviewAuditTrail,
+    SelfReviewSection, EvidenceLink, SelfReviewDraft, SelfReviewAuditTrail,
+    SelfReviewTemplate
 )
+from .serializers import (
+    SelfReviewSerializer, SelfReviewListSerializer, SelfReviewSectionSerializer,
+    EvidenceLinkSerializer, SelfReviewDraftSerializer, SelfReviewAuditTrailSerializer,
+    SelfReviewTemplateSerializer, ManagerReviewSerializer, ManagerReviewListSerializer,
+    ManagerReviewCreateSerializer, ManagerReviewUpdateSerializer,
+    ManagerReviewSubmitSerializer, ManagerReviewBulkActionSerializer,
+    ReviewAttachmentSerializer, ReviewAuditTrailSerializer
+)
+from apps.accounts.models import User
+from apps.cycles.models import ReviewCycle
 
 
-class ReviewListView(generics.ListCreateAPIView):
-    """
-    Review list and creation endpoint.
-    
-    Provides list of reviews with filtering,
-    and allows creation of new reviews.
-    """
+# Self-Review Views
+class SelfReviewListView(generics.ListCreateAPIView):
+    """List and create self-reviews."""
     
     permission_classes = [permissions.IsAuthenticated]
     
     def get_serializer_class(self):
-        """Return appropriate serializer based on request method."""
         if self.request.method == 'GET':
-            return ReviewListSerializer
-        return ReviewSerializer
+            return SelfReviewListSerializer
+        return SelfReviewSerializer
     
     def get_queryset(self):
-        """Get filtered queryset of reviews."""
         user = self.request.user
-        queryset = Review.objects.select_related(
-            'employee', 'reviewer', 'cycle'
-        ).prefetch_related('sections')
+        queryset = SelfReview.objects.filter(employee=user)
         
-        # Filter based on user role
-        view_type = self.request.query_params.get('view')
-        if view_type == 'employee':
-            queryset = queryset.filter(employee=user)
-        elif view_type == 'reviewer':
-            queryset = queryset.filter(reviewer=user)
-        else:
-            # Default: show all reviews where user is involved
-            queryset = queryset.filter(
-                Q(employee=user) | Q(reviewer=user)
-            )
-        
-        # Filter by review type
-        review_type = self.request.query_params.get('type')
-        if review_type:
-            queryset = queryset.filter(review_type=review_type)
-        
-        # Filter by status
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        
-        # Filter by cycle
-        cycle = self.request.query_params.get('cycle')
-        if cycle:
-            queryset = queryset.filter(cycle_id=cycle)
+        # Filter by cycle if provided
+        cycle_id = self.request.query_params.get('cycle')
+        if cycle_id:
+            queryset = queryset.filter(cycle_id=cycle_id)
         
         return queryset.order_by('-created_at')
     
     def perform_create(self, serializer):
-        """Set reviewer to current user if not specified."""
-        if not serializer.validated_data.get('reviewer_id'):
-            serializer.save(reviewer=self.request.user)
-        else:
-            serializer.save()
-    
-    @extend_schema(
-        summary="List Reviews",
-        description="Get a list of reviews with optional filtering.",
-        parameters=[
-            OpenApiParameter(
-                name='view',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Filter by view type: "employee" or "reviewer"'
-            ),
-            OpenApiParameter(
-                name='type',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Filter by review type: "self", "manager", "peer", "360"'
-            ),
-            OpenApiParameter(
-                name='status',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Filter by status'
-            ),
-            OpenApiParameter(
-                name='cycle',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Filter by cycle ID'
-            ),
-        ],
-        responses={
-            200: ReviewListSerializer(many=True),
-            401: "Authentication required"
-        }
-    )
-    def get(self, request, *args, **kwargs):
-        """Get list of reviews."""
-        return super().get(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Create Review",
-        description="Create a new review.",
-        responses={
-            201: ReviewSerializer,
-            400: "Validation error",
-            401: "Authentication required"
-        }
-    )
-    def post(self, request, *args, **kwargs):
-        """Create a new review."""
-        return super().post(request, *args, **kwargs)
+        serializer.save(employee=self.request.user)
 
 
-class ReviewDetailView(generics.RetrieveUpdateAPIView):
-    """
-    Review detail endpoint.
+class SelfReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a self-review."""
     
-    Provides detailed information about a specific review
-    and allows updates to content and status.
-    """
-    
-    serializer_class = ReviewSerializer
+    serializer_class = SelfReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
-    lookup_field = 'pk'
     
     def get_queryset(self):
-        """Get queryset filtered by user involvement."""
         user = self.request.user
-        return Review.objects.filter(
-            Q(employee=user) | Q(reviewer=user) | Q(employee__manager=user)
+        return SelfReview.objects.filter(employee=user)
+
+
+class SelfReviewSectionView(generics.RetrieveUpdateAPIView):
+    """Update a specific self-review section."""
+    
+    serializer_class = SelfReviewSectionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        return SelfReviewSection.objects.filter(self_review__employee=user)
+
+
+class EvidenceLinkView(generics.ListCreateAPIView):
+    """List and create evidence links for self-reviews."""
+    
+    serializer_class = EvidenceLinkSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        self_review_id = self.kwargs.get('self_review_id')
+        return EvidenceLink.objects.filter(
+            self_review__employee=user,
+            self_review_id=self_review_id
         )
     
-    @extend_schema(
-        summary="Get Review Details",
-        description="Retrieve detailed information about a specific review.",
-        responses={
-            200: ReviewSerializer,
-            404: "Review not found",
-            401: "Authentication required"
-        }
-    )
-    def get(self, request, *args, **kwargs):
-        """Get review details."""
-        return super().get(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Update Review",
-        description="Update a review's content or status.",
-        responses={
-            200: ReviewSerializer,
-            400: "Validation error",
-            404: "Review not found",
-            401: "Authentication required"
-        }
-    )
-    def patch(self, request, *args, **kwargs):
-        """Update review."""
-        review = self.get_object()
-        
-        # Update submitted_at when status changes to submitted
-        if request.data.get('status') == 'submitted' and review.status != 'submitted':
-            request.data['submitted_at'] = timezone.now()
-        
-        # Update approved_at when status changes to approved
-        if request.data.get('status') == 'approved' and review.status != 'approved':
-            request.data['approved_at'] = timezone.now()
-        
-        return super().patch(request, *args, **kwargs)
+    def perform_create(self, serializer):
+        self_review_id = self.kwargs.get('self_review_id')
+        self_review = get_object_or_404(
+            SelfReview,
+            id=self_review_id,
+            employee=self.request.user
+        )
+        serializer.save(self_review=self_review)
 
 
-class ReviewTemplateListView(generics.ListCreateAPIView):
-    """
-    Review template list and creation endpoint.
-    
-    Provides list of review templates and allows creation
-    of new templates (HR only).
-    """
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Submit Self-Review",
+    description="Submit a completed self-review for manager review.",
+    responses={
+        200: "Self-review submitted successfully",
+        400: "Validation error",
+        401: "Authentication required"
+    }
+)
+def submit_self_review(request, pk):
+    """Submit a self-review for manager review."""
+    try:
+        self_review = get_object_or_404(
+            SelfReview,
+            pk=pk,
+            employee=request.user
+        )
+        
+        # Validate prerequisites
+        if not self_review.prerequisites_met:
+            return Response(
+                {'error': 'Prerequisites not met. Please complete goals and peer feedback first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate completion
+        if self_review.completion_percentage < 100:
+            return Response(
+                {'error': 'Self-review must be 100% complete before submission.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update status
+        self_review.status = 'submitted'
+        self_review.submitted_at = timezone.now()
+        self_review.save()
+        
+        # Create audit trail entry
+        SelfReviewAuditTrail.objects.create(
+            self_review=self_review,
+            action='submitted',
+            user=request.user,
+            changes_summary='Self-review submitted for manager review',
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+        
+        return Response({'message': 'Self-review submitted successfully'})
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Auto-save Self-Review",
+    description="Auto-save self-review content to prevent data loss.",
+    responses={
+        200: "Auto-save successful",
+        400: "Validation error"
+    }
+)
+def auto_save_self_review(request, pk):
+    """Auto-save self-review content."""
+    try:
+        self_review = get_object_or_404(
+            SelfReview,
+            pk=pk,
+            employee=request.user
+        )
+        
+        # Update content fields
+        content_fields = [
+            'goal_achievement_summary', 'key_accomplishments',
+            'behavioral_competencies', 'development_areas', 'career_aspirations'
+        ]
+        
+        for field in content_fields:
+            if field in request.data:
+                setattr(self_review, field, request.data[field])
+        
+        self_review.last_auto_save = timezone.now()
+        self_review.save()
+        
+        # Create draft entry
+        section_type = request.data.get('section_type', 'general')
+        content = request.data.get('content', '')
+        
+        SelfReviewDraft.objects.create(
+            self_review=self_review,
+            section_type=section_type,
+            content=content,
+            word_count=len(content.split()) if content else 0,
+            is_auto_save=True,
+            save_reason='auto_save'
+        )
+        
+        return Response({'message': 'Auto-save successful'})
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# Manager Review Views
+class ManagerReviewListView(generics.ListCreateAPIView):
+    """List and create manager reviews."""
     
     permission_classes = [permissions.IsAuthenticated]
     
     def get_serializer_class(self):
-        """Return appropriate serializer based on request method."""
         if self.request.method == 'GET':
-            return ReviewTemplateListSerializer
-        return ReviewTemplateSerializer
+            return ManagerReviewListSerializer
+        return ManagerReviewCreateSerializer
     
     def get_queryset(self):
-        """Get queryset of active review templates."""
-        queryset = ReviewTemplate.objects.all()
+        user = self.request.user
         
-        # Filter by active status
-        is_active = self.request.query_params.get('is_active')
-        if is_active is not None:
-            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        if user.is_hr:
+            # HR can see all reviews
+            queryset = ManagerReview.objects.all()
+        elif user.is_manager:
+            # Managers can see their own reviews
+            queryset = ManagerReview.objects.filter(manager=user)
+        else:
+            # Employees can see reviews about them
+            queryset = ManagerReview.objects.filter(employee=user)
         
-        # Filter by review type
-        review_type = self.request.query_params.get('type')
-        if review_type:
-            queryset = queryset.filter(review_type=review_type)
+        # Filter by cycle if provided
+        cycle_id = self.request.query_params.get('cycle')
+        if cycle_id:
+            queryset = queryset.filter(cycle_id=cycle_id)
         
-        return queryset.order_by('name')
+        return queryset.order_by('-created_at')
     
-    @extend_schema(
-        summary="List Review Templates",
-        description="Get a list of review templates.",
-        parameters=[
-            OpenApiParameter(
-                name='is_active',
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                description='Filter by active status'
-            ),
-            OpenApiParameter(
-                name='type',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Filter by review type'
-            ),
-        ],
-        responses={
-            200: ReviewTemplateListSerializer(many=True),
-            401: "Authentication required"
-        }
-    )
-    def get(self, request, *args, **kwargs):
-        """Get list of review templates."""
-        return super().get(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Create Review Template",
-        description="Create a new review template (HR only).",
-        responses={
-            201: ReviewTemplateSerializer,
-            400: "Validation error",
-            401: "Authentication required",
-            403: "Permission denied"
-        }
-    )
-    def post(self, request, *args, **kwargs):
-        """Create a new review template."""
-        # Check if user is HR or admin
-        if not request.user.is_hr:
-            return Response(
-                {'error': 'Only HR can create review templates'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().post(request, *args, **kwargs)
+    def perform_create(self, serializer):
+        serializer.save(manager=self.request.user)
 
 
-class ReviewTemplateDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    Review template detail endpoint.
+class ManagerReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Retrieve, update, or delete a manager review."""
     
-    Provides detailed information about a specific template
-    and allows updates (HR only).
-    """
-    
-    serializer_class = ReviewTemplateSerializer
+    serializer_class = ManagerReviewSerializer
     permission_classes = [permissions.IsAuthenticated]
-    queryset = ReviewTemplate.objects.all()
-    lookup_field = 'pk'
     
-    @extend_schema(
-        summary="Get Review Template Details",
-        description="Retrieve detailed information about a specific review template.",
-        responses={
-            200: ReviewTemplateSerializer,
-            404: "Template not found",
-            401: "Authentication required"
-        }
-    )
-    def get(self, request, *args, **kwargs):
-        """Get review template details."""
-        return super().get(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Update Review Template",
-        description="Update a review template (HR only).",
-        responses={
-            200: ReviewTemplateSerializer,
-            400: "Validation error",
-            404: "Template not found",
-            401: "Authentication required",
-            403: "Permission denied"
-        }
-    )
-    def patch(self, request, *args, **kwargs):
-        """Update review template."""
-        if not request.user.is_hr:
-            return Response(
-                {'error': 'Only HR can update review templates'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().patch(request, *args, **kwargs)
-    
-    @extend_schema(
-        summary="Delete Review Template",
-        description="Delete a review template (HR only).",
-        responses={
-            204: "Template deleted",
-            404: "Template not found",
-            401: "Authentication required",
-            403: "Permission denied"
-        }
-    )
-    def delete(self, request, *args, **kwargs):
-        """Delete review template."""
-        if not request.user.is_hr:
-            return Response(
-                {'error': 'Only HR can delete review templates'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().delete(request, *args, **kwargs)
+    def get_queryset(self):
+        user = self.request.user
+        
+        if user.is_hr:
+            return ManagerReview.objects.all()
+        elif user.is_manager:
+            return ManagerReview.objects.filter(manager=user)
+        else:
+            return ManagerReview.objects.filter(employee=user)
 
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Get Employee Dossier",
+    description="Get comprehensive employee performance dossier for manager review.",
+    responses={
+        200: OpenApiTypes.OBJECT,
+        401: "Authentication required",
+        403: "Access denied",
+        404: "Employee not found"
+    }
+)
+def get_employee_dossier(request, employee_id):
+    """Get comprehensive employee performance dossier."""
+    try:
+        manager = request.user
+        
+        # Validate manager permissions
+        if not manager.is_manager:
+            return Response(
+                {'error': 'Access denied - manager role required'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get employee
+        employee = get_object_or_404(User, id=employee_id)
+        
+        # Check if employee is a direct report
+        if employee.manager != manager:
+            return Response(
+                {'error': 'Access denied - not your direct report'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get active cycle
+        cycle = ReviewCycle.objects.filter(is_active=True).first()
+        if not cycle:
+            return Response(
+                {'error': 'No active review cycle found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get employee data
+        dossier = {
+            'employee': {
+                'id': employee.id,
+                'name': employee.get_full_name(),
+                'email': employee.email,
+                'department': employee.department,
+                'position': employee.position,
+                'hire_date': employee.date_joined
+            },
+            'cycle': {
+                'id': cycle.id,
+                'name': cycle.name,
+                'start_date': cycle.start_date,
+                'end_date': cycle.end_date
+            },
+            'goals': [],
+            'self_review': None,
+            'peer_feedback': [],
+            'manager_review': None,
+            'performance_metrics': {}
+        }
+        
+        # Get goals
+        from apps.goals.models import Goal
+        goals = Goal.objects.filter(employee=employee, cycle=cycle)
+        for goal in goals:
+            dossier['goals'].append({
+                'id': goal.id,
+                'title': goal.title,
+                'status': goal.status,
+                'progress_percentage': goal.progress_percentage,
+                'target_date': goal.target_date,
+                'priority': goal.priority
+            })
+        
+        # Get self-review
+        try:
+            self_review = SelfReview.objects.get(employee=employee, cycle=cycle)
+            dossier['self_review'] = {
+                'id': self_review.id,
+                'status': self_review.status,
+                'completion_percentage': self_review.completion_percentage,
+                'submitted_at': self_review.submitted_at
+            }
+        except SelfReview.DoesNotExist:
+            pass
+        
+        # Get peer feedback
+        from apps.feedback.models import FeedbackRequest
+        feedback_requests = FeedbackRequest.objects.filter(
+            requester=employee,
+            cycle=cycle
+        )
+        for request in feedback_requests:
+            dossier['peer_feedback'].append({
+                'id': request.id,
+                'title': request.title,
+                'status': request.status,
+                'completion_percentage': request.completion_percentage
+            })
+        
+        # Get existing manager review
+        try:
+            manager_review = ManagerReview.objects.get(
+                employee=employee,
+                manager=manager,
+                cycle=cycle
+            )
+            dossier['manager_review'] = {
+                'id': manager_review.id,
+                'status': manager_review.status,
+                'overall_rating': manager_review.overall_rating,
+                'is_locked': manager_review.is_locked
+            }
+        except ManagerReview.DoesNotExist:
+            pass
+        
+        return Response(dossier)
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Submit Manager Review",
+    description="Submit a completed manager review with final rating.",
+    responses={
+        200: "Manager review submitted successfully",
+        400: "Validation error",
+        401: "Authentication required",
+        403: "Access denied"
+    }
+)
+def submit_manager_review(request, pk):
+    """Submit a manager review."""
+    try:
+        manager_review = get_object_or_404(
+            ManagerReview,
+            pk=pk,
+            manager=request.user
+        )
+        
+        # Validate review is complete
+        if not manager_review.is_complete:
+            return Response(
+                {'error': 'All required sections must be completed before submission.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate narrative word counts
+        min_words = 200
+        narrative_sections = [
+            manager_review.performance_summary,
+            manager_review.strengths,
+            manager_review.development_areas,
+            manager_review.career_recommendations
+        ]
+        
+        for i, section in enumerate(narrative_sections):
+            if len(section.split()) < min_words:
+                section_names = ['performance_summary', 'strengths', 'development_areas', 'career_recommendations']
+                return Response(
+                    {'error': f'Manager narrative section "{section_names[i]}" incomplete - minimum {min_words} words required.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Update status and lock
+        manager_review.status = 'submitted'
+        manager_review.is_locked = True
+        manager_review.submitted_at = timezone.now()
+        manager_review.save()
+        
+        # Create audit trail entry
+        ReviewAuditTrail.objects.create(
+            manager_review=manager_review,
+            action='submitted',
+            user=request.user,
+            change_summary='Manager review submitted and locked',
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+        
+        return Response({'message': 'Manager review submitted successfully'})
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Upload Review Attachment",
+    description="Upload an attachment for a manager review.",
+    responses={
+        201: ReviewAttachmentSerializer,
+        400: "Validation error",
+        401: "Authentication required"
+    }
+)
+def upload_review_attachment(request, review_id):
+    """Upload an attachment for a manager review."""
+    try:
+        manager_review = get_object_or_404(
+            ManagerReview,
+            pk=review_id,
+            manager=request.user
+        )
+        
+        # Validate file size (10MB limit)
+        file = request.FILES.get('file')
+        if file and file.size > 10 * 1024 * 1024:  # 10MB
+            return Response(
+                {'error': 'Attachment exceeds 10MB'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create attachment
+        attachment = ReviewAttachment.objects.create(
+            manager_review=manager_review,
+            file=file,
+            file_name=file.name if file else '',
+            file_size=file.size if file else 0,
+            file_type=request.data.get('file_type', 'document'),
+            description=request.data.get('description', ''),
+            uploaded_by=request.user
+        )
+        
+        serializer = ReviewAttachmentSerializer(attachment)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Bulk Action on Reviews",
+    description="Perform bulk actions on multiple manager reviews.",
+    responses={
+        200: "Bulk action completed successfully",
+        400: "Validation error",
+        401: "Authentication required"
+    }
+)
+def bulk_review_action(request):
+    """Perform bulk actions on manager reviews."""
+    try:
+        serializer = ManagerReviewBulkActionSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        review_ids = serializer.validated_data['review_ids']
+        action = serializer.validated_data['action']
+        reason = serializer.validated_data.get('reason', '')
+        
+        # Get reviews
+        reviews = ManagerReview.objects.filter(
+            id__in=review_ids,
+            manager=request.user
+        )
+        
+        # Perform action
+        updated_count = 0
+        for review in reviews:
+            if action == 'submit':
+                if not review.is_locked:
+                    review.status = 'submitted'
+                    review.is_locked = True
+                    review.submitted_at = timezone.now()
+                    review.save()
+                    updated_count += 1
+            elif action == 'approve':
+                if review.status == 'submitted':
+                    review.status = 'approved'
+                    review.approved_at = timezone.now()
+                    review.save()
+                    updated_count += 1
+            elif action == 'return':
+                if review.status in ['submitted', 'approved']:
+                    review.status = 'returned'
+                    review.is_locked = False
+                    review.save()
+                    updated_count += 1
+            elif action == 'lock':
+                if not review.is_locked:
+                    review.is_locked = True
+                    review.save()
+                    updated_count += 1
+            elif action == 'unlock':
+                if review.is_locked:
+                    review.is_locked = False
+                    review.save()
+                    updated_count += 1
+        
+        return Response({
+            'message': f'Bulk action completed. {updated_count} reviews updated.',
+            'action': action,
+            'updated_count': updated_count
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Get Review Statistics",
+    description="Get statistics for manager reviews.",
+    responses={
+        200: OpenApiTypes.OBJECT,
+        401: "Authentication required"
+    }
+)
+def get_review_statistics(request):
+    """Get statistics for manager reviews."""
+    try:
+        user = request.user
+        
+        if user.is_hr:
+            # HR statistics
+            stats = {
+                'total_reviews': ManagerReview.objects.count(),
+                'submitted_reviews': ManagerReview.objects.filter(status='submitted').count(),
+                'approved_reviews': ManagerReview.objects.filter(status='approved').count(),
+                'draft_reviews': ManagerReview.objects.filter(status='draft').count(),
+                'locked_reviews': ManagerReview.objects.filter(is_locked=True).count()
+            }
+        elif user.is_manager:
+            # Manager statistics
+            stats = {
+                'my_reviews': ManagerReview.objects.filter(manager=user).count(),
+                'submitted_reviews': ManagerReview.objects.filter(
+                    manager=user, status='submitted'
+                ).count(),
+                'approved_reviews': ManagerReview.objects.filter(
+                    manager=user, status='approved'
+                ).count(),
+                'draft_reviews': ManagerReview.objects.filter(
+                    manager=user, status='draft'
+                ).count(),
+                'direct_reports_count': User.objects.filter(manager=user).count()
+            }
+        else:
+            # Employee statistics
+            stats = {
+                'reviews_about_me': ManagerReview.objects.filter(employee=user).count(),
+                'pending_reviews': ManagerReview.objects.filter(
+                    employee=user, status='draft'
+                ).count(),
+                'completed_reviews': ManagerReview.objects.filter(
+                    employee=user, status__in=['submitted', 'approved']
+                ).count()
+            }
+        
+        return Response(stats)
+        
+    except Exception as e:
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# Template Views
+class SelfReviewTemplateListView(generics.ListAPIView):
+    """List self-review templates."""
+    
+    serializer_class = SelfReviewTemplateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return SelfReviewTemplate.objects.filter(is_active=True)
+
+
+class SelfReviewTemplateDetailView(generics.RetrieveAPIView):
+    """Retrieve a self-review template."""
+    
+    serializer_class = SelfReviewTemplateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = SelfReviewTemplate.objects.filter(is_active=True)

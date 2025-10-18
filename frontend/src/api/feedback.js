@@ -30,4 +30,12 @@ export const feedbackAPI = {
   createManagerFeedback: (data) => api.post('/feedback/manager/', data),
   updateManagerFeedback: (id, data) => api.patch(`/feedback/manager/${id}/`, data),
   acknowledgeFeedback: (id, data = {}) => api.post(`/feedback/manager/${id}/acknowledge/`, data),
+  
+  // Peer feedback system
+  getAvailablePeers: (params = {}) => api.get('/feedback/peers/', { params }),
+  createPeerFeedbackRequest: (data) => api.post('/feedback/peer-request/', data),
+  submitFeedbackResponse: (data) => api.post('/feedback/response/', data),
+  validateContentPolicy: (data) => api.post('/feedback/validate-content/', data),
+  getFeedbackStatistics: () => api.get('/feedback/statistics/'),
+  cancelFeedbackRequest: (id) => api.post(`/feedback/${id}/cancel/`),
 }

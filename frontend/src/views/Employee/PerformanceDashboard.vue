@@ -374,6 +374,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useToast } from 'vue-toastification'
+import { dashboardAPI } from '@/api/dashboard'
 import { goalsAPI } from '@/api/goals'
 import { feedbackAPI } from '@/api/feedback'
 import { reviewsAPI } from '@/api/reviews'
@@ -424,155 +425,51 @@ const upcomingItems = computed(() =>
 const loadDashboardData = async () => {
   try {
     loading.value = true
-    await Promise.all([
-      loadProgressData(),
-      loadActionItems(),
-      loadRecentActivity(),
-      checkDeadlines()
-    ])
+    
+    // Check if we have cached data and it's not stale
+    if (!dashboardAPI.isDataStale() && dashboardAPI.getCachedData()) {
+      const cachedData = dashboardAPI.getCachedData()
+      progressData.value = cachedData.data.progress
+      actionItems.value = cachedData.data.action_items
+      recentActivity.value = cachedData.data.recent_activity
+      urgentDeadlines.value = cachedData.data.deadlines
+      lastUpdated.value = new Date(cachedData.timestamp)
+    }
+    
+    // Load fresh data from API
+    const response = await dashboardAPI.getDashboardData()
+    const data = response.data
+    
+    progressData.value = data.progress
+    actionItems.value = data.action_items
+    recentActivity.value = data.recent_activity
+    urgentDeadlines.value = data.deadlines
     lastUpdated.value = new Date()
+    
+    // Cache the data
+    dashboardAPI.setCachedData(data)
+    
   } catch (error) {
     console.error('Error loading dashboard data:', error)
-    toast.error('Failed to load dashboard data')
+    
+    // Try to use cached data if available
+    const cachedData = dashboardAPI.getCachedData()
+    if (cachedData) {
+      progressData.value = cachedData.data.progress
+      actionItems.value = cachedData.data.action_items
+      recentActivity.value = cachedData.data.recent_activity
+      urgentDeadlines.value = cachedData.data.deadlines
+      lastUpdated.value = new Date(cachedData.timestamp)
+      toast.warning('Using cached data - some information may be outdated')
+    } else {
+      toast.error('Failed to load dashboard data')
+    }
   } finally {
     loading.value = false
   }
 }
 
-const loadProgressData = async () => {
-  try {
-    // Load goals progress
-    const goalsResponse = await goalsAPI.getGoals()
-    const goals = goalsResponse.data
-    const completedGoals = goals.filter(goal => goal.status === 'completed').length
-    progressData.value.goals_completion = goals.length > 0 ? Math.round((completedGoals / goals.length) * 100) : 0
-
-    // Load self-review progress
-    const selfReviewResponse = await reviewsAPI.getSelfReviews()
-    const selfReviews = selfReviewResponse.data
-    if (selfReviews.length > 0) {
-      progressData.value.self_review_completion = selfReviews[0].completion_percentage || 0
-    }
-
-    // Load peer feedback progress
-    const feedbackResponse = await feedbackAPI.getFeedbackStatistics()
-    const feedbackStats = feedbackResponse.data
-    progressData.value.peer_feedback_completion = feedbackStats.requests_completed || 0
-
-    // Calculate overall completion
-    const components = [
-      progressData.value.goals_completion,
-      progressData.value.self_review_completion,
-      progressData.value.peer_feedback_completion
-    ]
-    progressData.value.overall_completion = Math.round(components.reduce((sum, val) => sum + val, 0) / components.length)
-  } catch (error) {
-    console.error('Error loading progress data:', error)
-  }
-}
-
-const loadActionItems = async () => {
-  try {
-    // This would typically come from a dedicated API endpoint
-    // For now, we'll generate mock data based on current state
-    const items = []
-    
-    // Goals action items
-    const goalsResponse = await goalsAPI.getGoals()
-    const goals = goalsResponse.data
-    const incompleteGoals = goals.filter(goal => goal.status !== 'completed')
-    
-    incompleteGoals.forEach(goal => {
-      items.push({
-        id: `goal-${goal.id}`,
-        title: `Complete Goal: ${goal.title}`,
-        description: goal.description,
-        due_date: goal.target_date,
-        priority: goal.priority === 'high' ? 'high' : 'medium',
-        status: goal.status === 'draft' ? 'pending' : 'in_progress',
-        type: 'goal',
-        action_url: `/employee/goals`
-      })
-    })
-
-    // Self-review action items
-    const selfReviewResponse = await reviewsAPI.getSelfReviews()
-    const selfReviews = selfReviewResponse.data
-    if (selfReviews.length > 0 && selfReviews[0].completion_percentage < 100) {
-      items.push({
-        id: 'self-review',
-        title: 'Complete Self Review',
-        description: 'Finish your self-assessment',
-        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-        priority: 'high',
-        status: 'in_progress',
-        type: 'self_review',
-        action_url: `/employee/self-review`
-      })
-    }
-
-    // Peer feedback action items
-    const feedbackResponse = await feedbackAPI.getFeedbackStatistics()
-    const feedbackStats = feedbackResponse.data
-    if (feedbackStats.feedback_to_provide > 0) {
-      items.push({
-        id: 'peer-feedback',
-        title: 'Provide Peer Feedback',
-        description: `${feedbackStats.feedback_to_provide} feedback requests pending`,
-        due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
-        priority: 'medium',
-        status: 'pending',
-        type: 'peer_feedback',
-        action_url: `/employee/peer-feedback`
-      })
-    }
-
-    actionItems.value = items.sort((a, b) => {
-      // Sort by priority and due date
-      const priorityOrder = { high: 3, medium: 2, low: 1 }
-      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-        return priorityOrder[b.priority] - priorityOrder[a.priority]
-      }
-      return new Date(a.due_date) - new Date(b.due_date)
-    })
-  } catch (error) {
-    console.error('Error loading action items:', error)
-  }
-}
-
-const loadRecentActivity = async () => {
-  try {
-    // This would typically come from a dedicated API endpoint
-    // For now, we'll generate mock data
-    const activities = [
-      {
-        id: 1,
-        title: 'Goal Updated',
-        description: 'Updated progress on "Increase Sales by 20%"',
-        type: 'goal_update',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
-      },
-      {
-        id: 2,
-        title: 'Self Review Started',
-        description: 'Began working on your self-assessment',
-        type: 'self_review_start',
-        timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) // 1 day ago
-      },
-      {
-        id: 3,
-        title: 'Peer Feedback Received',
-        description: 'Received feedback from John Smith',
-        type: 'feedback_received',
-        timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) // 3 days ago
-      }
-    ]
-    
-    recentActivity.value = activities
-  } catch (error) {
-    console.error('Error loading recent activity:', error)
-  }
-}
+// Individual loading methods removed - now using unified API
 
 const checkDeadlines = () => {
   const now = new Date()
@@ -593,11 +490,11 @@ const checkDeadlines = () => {
 const refreshActivity = async () => {
   try {
     refreshingActivity.value = true
-    await loadRecentActivity()
-    toast.success('Activity refreshed')
+    await loadDashboardData()
+    toast.success('Dashboard refreshed')
   } catch (error) {
-    console.error('Error refreshing activity:', error)
-    toast.error('Failed to refresh activity')
+    console.error('Error refreshing dashboard:', error)
+    toast.error('Failed to refresh dashboard')
   } finally {
     refreshingActivity.value = false
   }
