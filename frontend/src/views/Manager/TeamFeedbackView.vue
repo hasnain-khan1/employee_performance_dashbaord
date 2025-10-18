@@ -334,9 +334,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { feedbackAPI } from '@/api/feedback'
 import { authAPI } from '@/api/auth'
+import { useAuthStore } from '@/store/auth'
 import { useToast } from 'vue-toastification'
 
 const toast = useToast()
+const authStore = useAuthStore()
 
 // Data
 const feedback = ref([])
@@ -420,12 +422,17 @@ const loadFeedback = async () => {
 
 const loadTeamMembers = async () => {
   try {
-    // Get current user
-    const userResponse = await authAPI.getCurrentUser()
-    const currentUserId = userResponse.data.id
+    // Get current user from auth store
+    const currentUserId = authStore.user?.id
+    
+    if (!currentUserId) {
+      console.error('No current user found')
+      toast.error('User not authenticated')
+      return
+    }
     
     // Get all users and filter for direct reports
-    const usersResponse = await authAPI.getAllUsers()
+    const usersResponse = await authAPI.getUsers()
     const allUsers = usersResponse.data.results || usersResponse.data
     
     // Filter to get direct reports (users whose manager is current user)
@@ -503,11 +510,18 @@ const saveFeedback = async () => {
   try {
     saving.value = true
     
+    // Transform the form data to match backend expectations
+    const formData = { ...feedbackForm.value }
+    if (formData.employee_id) {
+      formData.employee = formData.employee_id
+      delete formData.employee_id
+    }
+    
     if (editingFeedback.value) {
-      await feedbackAPI.updateManagerFeedback(editingFeedback.value.id, feedbackForm.value)
+      await feedbackAPI.updateManagerFeedback(editingFeedback.value.id, formData)
       toast.success('Feedback updated successfully')
     } else {
-      await feedbackAPI.createManagerFeedback(feedbackForm.value)
+      await feedbackAPI.createManagerFeedback(formData)
       toast.success('Feedback created successfully')
     }
     
@@ -519,8 +533,8 @@ const saveFeedback = async () => {
     let errorMsg = 'Failed to save feedback'
     if (error.response?.data) {
       const data = error.response.data
-      if (data.employee_id) {
-        errorMsg = Array.isArray(data.employee_id) ? data.employee_id[0] : data.employee_id
+      if (data.employee) {
+        errorMsg = Array.isArray(data.employee) ? data.employee[0] : data.employee
       } else if (data.detail) {
         errorMsg = data.detail
       } else if (data.message) {

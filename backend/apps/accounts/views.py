@@ -157,7 +157,7 @@ class PasswordResetView(APIView):
 
 
 class UserListView(generics.ListAPIView):
-    """List all users (HR and Admin only)."""
+    """List users. HR and Admin see all users, Managers see their direct reports."""
     queryset = User.objects.all()
     serializer_class = UserListSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -166,6 +166,9 @@ class UserListView(generics.ListAPIView):
         user = self.request.user
         if user.is_hr or user.is_admin:
             return User.objects.all()
+        elif user.is_manager:
+            # Managers can see their direct reports
+            return User.objects.filter(manager=user)
         return User.objects.none()
 
 
