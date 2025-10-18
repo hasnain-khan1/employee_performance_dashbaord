@@ -56,23 +56,75 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         
         # Generate employee ID if not provided
         if not validated_data.get('employee_id'):
-            last_user = User.objects.filter(
-                employee_id__startswith='EMP'
-            ).order_by('-employee_id').first()
-            
-            if last_user:
-                last_id = int(last_user.employee_id[3:])
-                new_id = f"EMP{last_id + 1:06d}"
-            else:
-                new_id = "EMP000001"
-            
-            validated_data['employee_id'] = new_id
+            validated_data['employee_id'] = self._generate_employee_id()
         
         user = User.objects.create_user(
             password=password,
             **validated_data
         )
         return user
+    
+    def _generate_employee_id(self):
+        """Generate a unique employee ID with database transaction protection."""
+        import time
+        import random
+        import uuid
+        from django.db import transaction
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # Use database transaction to ensure atomicity
+        with transaction.atomic():
+            # Method 1: Find the highest existing EMP ID and increment
+            last_user = User.objects.select_for_update().filter(
+                employee_id__regex=r'^EMP\d{6}$'
+            ).order_by('-employee_id').first()
+            
+            if last_user:
+                last_id = int(last_user.employee_id[3:])
+                new_id = f"EMP{last_id + 1:06d}"
+                logger.info(f"Generated employee ID based on last user: {new_id}")
+            else:
+                new_id = "EMP000001"
+                logger.info(f"Generated first employee ID: {new_id}")
+            
+            # Check if this ID already exists (race condition protection)
+            if not User.objects.filter(employee_id=new_id).exists():
+                logger.info(f"Employee ID {new_id} is unique, returning it")
+                return new_id
+            
+            logger.warning(f"Employee ID {new_id} already exists, trying alternatives")
+            
+            # Method 2: Use timestamp-based ID if collision occurs
+            timestamp = int(time.time() * 1000) % 1000000  # Last 6 digits of timestamp
+            new_id = f"EMP{timestamp:06d}"
+            
+            if not User.objects.filter(employee_id=new_id).exists():
+                logger.info(f"Generated timestamp-based employee ID: {new_id}")
+                return new_id
+            
+            # Method 3: Use random number as fallback
+            for i in range(100):  # Try 100 random numbers
+                random_id = random.randint(100000, 999999)
+                new_id = f"EMP{random_id:06d}"
+                
+                if not User.objects.filter(employee_id=new_id).exists():
+                    logger.info(f"Generated random employee ID: {new_id}")
+                    return new_id
+            
+            # Method 4: Use UUID-based approach
+            for i in range(10):  # Try 10 UUID-based IDs
+                unique_id = str(uuid.uuid4())[:6].upper()
+                new_id = f"EMP{unique_id}"
+                
+                if not User.objects.filter(employee_id=new_id).exists():
+                    logger.info(f"Generated UUID-based employee ID: {new_id}")
+                    return new_id
+        
+        # Final fallback - this should never be reached
+        logger.error("Failed to generate unique employee ID after all methods")
+        raise serializers.ValidationError("Unable to generate unique employee ID. Please try again.")
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

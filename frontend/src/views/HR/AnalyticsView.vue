@@ -78,7 +78,7 @@
           <v-card-text>
             <v-data-table
               :headers="departmentHeaders"
-              :items="departmentData"
+              :items="Array.isArray(departmentData) ? departmentData : []"
               :loading="loading"
               :items-per-page="10"
               class="elevation-1"

@@ -27,7 +27,7 @@
               <v-col cols="12" md="3">
                 <v-select
                   v-model="filterRole"
-                  :items="roleOptions"
+                  :items="Array.isArray(roleOptions) ? roleOptions : []"
                   label="Filter by Role"
                   clearable
                   @update:model-value="loadEmployees"
@@ -36,7 +36,7 @@
               <v-col cols="12" md="3">
                 <v-select
                   v-model="filterStatus"
-                  :items="statusOptions"
+                  :items="Array.isArray(statusOptions) ? statusOptions : []"
                   label="Filter by Status"
                   clearable
                   @update:model-value="loadEmployees"
@@ -86,7 +86,7 @@
           <v-card-text>
             <v-data-table
               :headers="headers"
-              :items="employees"
+              :items="Array.isArray(employees) ? employees : []"
               :loading="loading"
               :items-per-page="15"
               class="elevation-1"
@@ -358,7 +358,7 @@
 
             <v-select
               v-model="editForm.department"
-              :items="departmentOptions"
+                  :items="Array.isArray(departmentOptions) ? departmentOptions : []"
               item-title="name"
               item-value="id"
               label="Department"
@@ -369,7 +369,7 @@
 
             <v-select
               v-model="editForm.manager"
-              :items="managerOptions"
+                  :items="Array.isArray(managerOptions) ? managerOptions : []"
               item-title="full_name"
               item-value="id"
               label="Manager"

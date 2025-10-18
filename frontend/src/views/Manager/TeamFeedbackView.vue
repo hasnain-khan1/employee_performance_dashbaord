@@ -20,7 +20,7 @@
               <v-col cols="12" md="4">
                 <v-select
                   v-model="filters.employee_id"
-                  :items="teamMembers"
+                  :items="Array.isArray(teamMembers) ? teamMembers : []"
                   item-title="name"
                   item-value="id"
                   label="Filter by Employee"
@@ -31,7 +31,7 @@
               <v-col cols="12" md="4">
                 <v-select
                   v-model="filters.feedback_type"
-                  :items="feedbackTypes"
+                  :items="Array.isArray(feedbackTypes) ? feedbackTypes : []"
                   item-title="title"
                   item-value="value"
                   label="Filter by Type"
@@ -42,7 +42,7 @@
               <v-col cols="12" md="4">
                 <v-select
                   v-model="filters.is_acknowledged"
-                  :items="acknowledgmentOptions"
+                  :items="Array.isArray(acknowledgmentOptions) ? acknowledgmentOptions : []"
                   item-title="title"
                   item-value="value"
                   label="Filter by Status"
@@ -55,7 +55,7 @@
             <!-- Feedback List -->
             <v-data-table
               :headers="headers"
-              :items="feedback"
+              :items="Array.isArray(feedback) ? feedback : []"
               :loading="loading"
               class="elevation-1"
             >
@@ -116,7 +116,7 @@
               <v-col cols="12">
                 <v-select
                   v-model="feedbackForm.employee_id"
-                  :items="teamMembers"
+                  :items="Array.isArray(teamMembers) ? teamMembers : []"
                   item-title="name"
                   item-value="id"
                   label="Employee"
@@ -131,7 +131,7 @@
               <v-col cols="12" md="6">
                 <v-select
                   v-model="feedbackForm.feedback_type"
-                  :items="feedbackTypes"
+                  :items="Array.isArray(feedbackTypes) ? feedbackTypes : []"
                   item-title="title"
                   item-value="value"
                   label="Feedback Type"
@@ -142,7 +142,7 @@
               <v-col cols="12" md="6">
                 <v-select
                   v-model="feedbackForm.visibility"
-                  :items="visibilityOptions"
+                  :items="Array.isArray(visibilityOptions) ? visibilityOptions : []"
                   item-title="title"
                   item-value="value"
                   label="Visibility"

@@ -77,7 +77,7 @@
         <v-select
           v-model="statusFilter"
           label="Filter by Status"
-          :items="statusOptions"
+          :items="Array.isArray(statusOptions) ? statusOptions : []"
           variant="outlined"
           clearable
           @update:model-value="filterReviews"
@@ -116,7 +116,7 @@
           <v-data-table
             v-model="selectedReviews"
             :headers="headers"
-            :items="filteredReviews"
+            :items="Array.isArray(filteredReviews) ? filteredReviews : []"
             :loading="loading"
             item-key="id"
             show-select

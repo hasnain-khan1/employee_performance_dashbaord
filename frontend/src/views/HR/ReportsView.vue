@@ -20,21 +20,21 @@
           <v-card-text class="mt-4">
             <v-select
               v-model="newReport.type"
-              :items="reportTypes"
+              :items="Array.isArray(reportTypes) ? reportTypes : []"
               label="Report Type"
               variant="outlined"
             />
             
             <v-select
               v-model="newReport.format"
-              :items="formatOptions"
+              :items="Array.isArray(formatOptions) ? formatOptions : []"
               label="Export Format"
               variant="outlined"
             />
 
             <v-select
               v-model="newReport.period"
-              :items="periodOptions"
+              :items="Array.isArray(periodOptions) ? periodOptions : []"
               label="Time Period"
               variant="outlined"
             />
@@ -61,7 +61,7 @@
             <v-select
               v-if="['performance', 'goals', 'reviews'].includes(newReport.type)"
               v-model="newReport.departmentId"
-              :items="departments"
+              :items="Array.isArray(departments) ? departments : []"
               item-title="name"
               item-value="id"
               label="Select Department (Optional)"
@@ -141,7 +141,7 @@
             />
             <v-select
               v-model="filterType"
-              :items="[{ title: 'All Types', value: null }, ...reportTypes]"
+              :items="Array.isArray(reportTypes) ? [{ title: 'All Types', value: null }, ...reportTypes] : []"
               label="Filter by Type"
               variant="outlined"
               density="compact"
@@ -153,7 +153,7 @@
           <v-card-text>
             <v-data-table
               :headers="reportHeaders"
-              :items="filteredReports"
+              :items="Array.isArray(filteredReports) ? filteredReports : []"
               :loading="loading"
               :items-per-page="10"
               class="elevation-1"

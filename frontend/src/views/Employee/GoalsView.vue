@@ -20,7 +20,7 @@
       <v-col cols="12" md="4">
         <v-select
           v-model="filters.status"
-          :items="statusOptions"
+          :items="Array.isArray(statusOptions) ? statusOptions : []"
           label="Filter by Status"
           clearable
           @update:model-value="loadGoals"
@@ -29,7 +29,7 @@
       <v-col cols="12" md="4">
         <v-select
           v-model="filters.priority"
-          :items="priorityOptions"
+          :items="Array.isArray(priorityOptions) ? priorityOptions : []"
           label="Filter by Priority"
           clearable
           @update:model-value="loadGoals"
@@ -52,7 +52,7 @@
         <v-card>
           <v-data-table
             :headers="headers"
-            :items="goals"
+            :items="Array.isArray(goals) ? goals : []"
             :loading="loading"
             :items-per-page="10"
             class="elevation-1"
@@ -188,7 +188,7 @@
               <v-col cols="12" md="6">
                 <v-select
                   v-model="goalForm.priority"
-                  :items="priorityOptions"
+                  :items="Array.isArray(priorityOptions) ? priorityOptions : []"
                   label="Priority"
                   :readonly="viewingGoal"
                   required

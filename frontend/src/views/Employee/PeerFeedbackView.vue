@@ -86,7 +86,7 @@
           <v-card-text class="pa-0">
             <v-data-table
               :headers="sentHeaders"
-              :items="sentRequests"
+              :items="Array.isArray(sentRequests) ? sentRequests : []"
               :loading="loading"
               class="elevation-0"
               :items-per-page="10"
@@ -170,7 +170,7 @@
           <v-card-text class="pa-0">
             <v-data-table
               :headers="receivedHeaders"
-              :items="receivedRequests"
+              :items="Array.isArray(receivedRequests) ? receivedRequests : []"
               :loading="loading"
               class="elevation-0"
               :items-per-page="10"

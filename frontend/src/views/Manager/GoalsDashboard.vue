@@ -90,7 +90,7 @@
         <v-select
           v-model="statusFilter"
           label="Filter by status"
-          :items="statusOptions"
+          :items="Array.isArray(statusOptions) ? statusOptions : []"
           variant="outlined"
           clearable
           @update:model-value="filterGoals"
@@ -100,7 +100,7 @@
         <v-select
           v-model="sortBy"
           label="Sort by"
-          :items="sortOptions"
+          :items="Array.isArray(sortOptions) ? sortOptions : []"
           variant="outlined"
           @update:model-value="sortGoals"
         />
@@ -169,7 +169,7 @@
       <v-data-table
         v-model="selectedGoals"
         :headers="headers"
-        :items="filteredGoals"
+        :items="Array.isArray(filteredGoals) ? filteredGoals : []"
         :loading="loading"
         item-key="id"
         show-select

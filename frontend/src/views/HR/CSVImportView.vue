@@ -208,7 +208,7 @@
             <h3 class="text-h6 mb-3">Data Preview</h3>
             <v-data-table
               :headers="previewHeaders"
-              :items="previewData"
+              :items="Array.isArray(previewData) ? previewData : []"
               :items-per-page="10"
               class="elevation-1"
             >

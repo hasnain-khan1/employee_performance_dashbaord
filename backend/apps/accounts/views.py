@@ -16,7 +16,7 @@ from drf_spectacular.utils import extend_schema, OpenApiTypes
 from drf_spectacular.types import OpenApiTypes
 
 from .models import User
-from .serializers import UserSerializer, UserListSerializer
+from .serializers import UserSerializer, UserListSerializer, UserRegistrationSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -59,8 +59,50 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 class UserRegistrationView(generics.CreateAPIView):
     """User registration view."""
-    serializer_class = UserSerializer
+    serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new user with error handling."""
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.save()
+            
+            # Generate tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'user': UserSerializer(user).data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            # Handle specific database errors
+            if 'UNIQUE constraint failed' in str(e):
+                if 'employee_id' in str(e):
+                    return Response({
+                        'error': 'Employee ID already exists. Please try again.',
+                        'detail': 'A user with this employee ID already exists in the system.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                elif 'username' in str(e):
+                    return Response({
+                        'error': 'Username already exists.',
+                        'detail': 'Please choose a different username.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                elif 'email' in str(e):
+                    return Response({
+                        'error': 'Email already exists.',
+                        'detail': 'An account with this email already exists.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Generic error handling
+            return Response({
+                'error': 'Registration failed.',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -139,7 +181,7 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
 @extend_schema(
     summary="Register User",
     description="Register a new user account.",
-    request=UserSerializer,
+    request=UserRegistrationSerializer,
     responses={
         201: UserSerializer,
         400: "Validation error"
@@ -147,18 +189,43 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
 )
 def register_view(request):
     """Register a new user."""
-    serializer = UserSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.save()
-        refresh = RefreshToken.for_user(user)
+    try:
+        serializer = UserRegistrationSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'user': UserSerializer(user).data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        # Handle specific database errors
+        if 'UNIQUE constraint failed' in str(e):
+            if 'employee_id' in str(e):
+                return Response({
+                    'error': 'Employee ID already exists. Please try again.',
+                    'detail': 'A user with this employee ID already exists in the system.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            elif 'username' in str(e):
+                return Response({
+                    'error': 'Username already exists.',
+                    'detail': 'Please choose a different username.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            elif 'email' in str(e):
+                return Response({
+                    'error': 'Email already exists.',
+                    'detail': 'An account with this email already exists.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generic error handling
         return Response({
-            'user': UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
-        }, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            'error': 'Registration failed.',
+            'detail': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])

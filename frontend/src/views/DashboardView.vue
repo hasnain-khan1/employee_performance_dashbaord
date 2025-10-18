@@ -288,7 +288,7 @@
             <v-card-text>
               <v-data-table
                 :headers="departmentHeaders"
-                :items="hrData.department_performance || []"
+                :items="Array.isArray(hrData.department_performance) ? hrData.department_performance : []"
                 :items-per-page="5"
                 density="compact"
                 class="elevation-0"
@@ -337,7 +337,7 @@
               <span class="text-white">Recent Activity</span>
             </v-card-title>
             <v-card-text>
-              <v-timeline density="compact" v-if="hrData.recent_activity && hrData.recent_activity.length > 0">
+              <v-timeline density="compact" v-if="Array.isArray(hrData.recent_activity) && hrData.recent_activity.length > 0">
                 <v-timeline-item
                   v-for="activity in hrData.recent_activity.slice(0, 8)"
                   :key="activity.id + activity.type"
@@ -362,7 +362,7 @@
               <span class="text-white">Alerts & Notifications</span>
             </v-card-title>
             <v-card-text class="pa-0">
-              <v-list v-if="hrData.alerts && hrData.alerts.length > 0">
+              <v-list v-if="Array.isArray(hrData.alerts) && hrData.alerts.length > 0">
                 <v-list-item
                   v-for="(alert, index) in hrData.alerts"
                   :key="'alert-' + index"
@@ -442,7 +442,11 @@ const loading = ref(false)
 const quickStats = ref([])
 const employeeData = ref(null)
 const managerData = ref(null)
-const hrData = ref(null)
+const hrData = ref({
+  department_performance: [],
+  recent_activity: [],
+  alerts: []
+})
 
 // Department table headers
 const departmentHeaders = [

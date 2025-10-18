@@ -35,7 +35,7 @@
           <v-card-text>
             <v-data-table
               :headers="memberHeaders"
-              :items="teamMembers"
+              :items="Array.isArray(teamMembers) ? teamMembers : []"
               :loading="loading"
               :items-per-page="10"
               class="elevation-1"

@@ -76,7 +76,7 @@
                 v-model="form.role"
                 label="Role"
                 prepend-icon="mdi-account-tie"
-                :items="roleOptions"
+                :items="Array.isArray(roleOptions) ? roleOptions : []"
                 :error-messages="errors.role"
                 required
               />

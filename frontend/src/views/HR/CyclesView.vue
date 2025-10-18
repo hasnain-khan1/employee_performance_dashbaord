@@ -114,7 +114,7 @@
             <v-spacer></v-spacer>
             <v-select
               v-model="filterStatus"
-              :items="statusOptions"
+              :items="Array.isArray(statusOptions) ? statusOptions : []"
               label="Filter by Status"
               variant="outlined"
               density="compact"
@@ -126,7 +126,7 @@
           <v-card-text>
             <v-data-table
               :headers="headers"
-              :items="cycles"
+              :items="Array.isArray(cycles) ? cycles : []"
               :loading="loading"
               :items-per-page="10"
               class="elevation-1"
@@ -318,7 +318,7 @@
             <v-divider class="my-4"></v-divider>
             <v-select
               v-model="formData.status"
-              :items="statusOptions"
+              :items="Array.isArray(statusOptions) ? statusOptions : []"
               label="Status"
               variant="outlined"
             />
