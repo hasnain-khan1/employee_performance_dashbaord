@@ -2,7 +2,17 @@
   <v-container fluid>
     <v-row>
       <v-col cols="12">
-        <h1 class="text-h4 mb-6">Analytics Dashboard</h1>
+        <div class="d-flex justify-space-between align-center mb-6">
+          <h1 class="text-h4">Analytics Dashboard</h1>
+          <v-btn 
+            color="primary" 
+            @click="refreshData"
+            :loading="loading"
+            prepend-icon="mdi-refresh"
+          >
+            Refresh
+          </v-btn>
+        </div>
       </v-col>
     </v-row>
 
@@ -158,16 +168,17 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useToast } from 'vue-toastification'
+import { analyticsAPI } from '@/api/analytics'
+
+const toast = useToast()
 
 // Reactive data
 const loading = ref(false)
-
-const keyMetrics = ref([
-  { title: 'Total Employees', value: '150', change: '+5 this month', icon: 'mdi-account-group', color: 'primary' },
-  { title: 'Active Goals', value: '420', change: '+12 this week', icon: 'mdi-target', color: 'blue' },
-  { title: 'Completed Reviews', value: '95%', change: '+3% vs last cycle', icon: 'mdi-clipboard-check', color: 'green' },
-  { title: 'Avg Performance', value: '4.2/5', change: '+0.3 vs last cycle', icon: 'mdi-star', color: 'orange' }
-])
+const keyMetrics = ref([])
+const departmentData = ref([])
+const recentActivity = ref([])
+const alerts = ref([])
 
 const departmentHeaders = [
   { title: 'Department', key: 'name', sortable: true },
@@ -177,37 +188,100 @@ const departmentHeaders = [
   { title: 'Avg Rating', key: 'avg_rating', sortable: true }
 ]
 
-const departmentData = ref([
-  { name: 'Engineering', employee_count: 45, performance_score: 85, goal_completion: 78, avg_rating: 4.2 },
-  { name: 'Sales', employee_count: 25, performance_score: 92, goal_completion: 85, avg_rating: 4.5 },
-  { name: 'Marketing', employee_count: 15, performance_score: 78, goal_completion: 72, avg_rating: 3.9 },
-  { name: 'HR', employee_count: 8, performance_score: 88, goal_completion: 90, avg_rating: 4.3 }
-])
-
-const recentActivity = ref([
-  { id: 1, description: 'John Doe completed Q4 review', timestamp: '2 hours ago', color: 'green' },
-  { id: 2, description: 'Jane Smith submitted new goal', timestamp: '4 hours ago', color: 'blue' },
-  { id: 3, description: 'Mike Johnson requested feedback', timestamp: '6 hours ago', color: 'orange' },
-  { id: 4, description: 'Sarah Wilson approved team goals', timestamp: '1 day ago', color: 'purple' }
-])
-
-const alerts = ref([
-  { id: 1, title: 'Review Cycle Ending', message: 'Q4 2024 cycle ends in 5 days', icon: 'mdi-clock-alert', color: 'orange' },
-  { id: 2, title: 'Goal Approval Needed', message: '15 goals pending approval', icon: 'mdi-target', color: 'blue' },
-  { id: 3, title: 'Performance Alert', message: '3 employees below target', icon: 'mdi-alert', color: 'red' }
-])
-
 // Methods
 const loadAnalyticsData = async () => {
   try {
     loading.value = true
-    // Load analytics data from API
-    console.log('Loading analytics data...')
+    
+    // Load HR dashboard statistics
+    const response = await analyticsAPI.getHRStats()
+    const data = response.data
+    
+    // Update key metrics
+    keyMetrics.value = [
+      { 
+        title: 'Total Employees', 
+        value: data.stats?.total_employees || 0, 
+        change: 'Active employees', 
+        icon: 'mdi-account-group', 
+        color: 'primary' 
+      },
+      { 
+        title: 'Active Cycles', 
+        value: data.stats?.active_cycles || 0, 
+        change: 'Review cycles', 
+        icon: 'mdi-calendar-clock', 
+        color: 'blue' 
+      },
+      { 
+        title: 'Completed Reviews', 
+        value: data.stats?.completed_reviews || 0, 
+        change: 'Manager reviews', 
+        icon: 'mdi-clipboard-check', 
+        color: 'green' 
+      },
+      { 
+        title: 'Pending Feedback', 
+        value: data.stats?.pending_feedback || 0, 
+        change: 'Awaiting response', 
+        icon: 'mdi-comment-text', 
+        color: 'orange' 
+      }
+    ]
+    
+    // Update department data
+    departmentData.value = data.department_performance || []
+    
+    // Update recent activity
+    recentActivity.value = data.recent_activity || []
+    
+    // Update alerts
+    alerts.value = data.alerts || []
+    
   } catch (error) {
     console.error('Error loading analytics data:', error)
+    toast.error('Failed to load analytics data')
+    
+    // Fallback to empty data
+    keyMetrics.value = [
+      { title: 'Total Employees', value: 0, change: 'No data', icon: 'mdi-account-group', color: 'primary' },
+      { title: 'Active Cycles', value: 0, change: 'No data', icon: 'mdi-calendar-clock', color: 'blue' },
+      { title: 'Completed Reviews', value: 0, change: 'No data', icon: 'mdi-clipboard-check', color: 'green' },
+      { title: 'Pending Feedback', value: 0, change: 'No data', icon: 'mdi-comment-text', color: 'orange' }
+    ]
+    departmentData.value = []
+    recentActivity.value = []
+    alerts.value = []
   } finally {
     loading.value = false
   }
+}
+
+const refreshData = async () => {
+  toast.info('Refreshing analytics data...')
+  await loadAnalyticsData()
+  toast.success('Analytics data refreshed')
+}
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return 'N/A'
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins} min ago`
+  if (diffHours < 24) return `${diffHours} hours ago`
+  if (diffDays < 7) return `${diffDays} days ago`
+  
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+  })
 }
 
 // Lifecycle
