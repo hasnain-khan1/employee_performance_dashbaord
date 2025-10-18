@@ -21,6 +21,7 @@ export const goalsAPI = {
   // Goal approval
   approveGoal: (id, data) => api.post(`/goals/${id}/approve/`, data),
   rejectGoal: (id, data) => api.post(`/goals/${id}/reject/`, data),
+  submitGoalForApproval: (id) => api.post(`/goals/${id}/submit/`),
   
   // Manager-specific endpoints
   getManagerGoals: (params = {}) => api.get('/goals/manager/team/', { params }),

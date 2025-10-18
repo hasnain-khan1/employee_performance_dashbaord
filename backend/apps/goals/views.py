@@ -350,9 +350,8 @@ def submit_goal_review(request, goal_id):
     GoalUpdate.objects.create(
         goal=goal,
         updated_by=request.user,
-        update_type='manager_review',
-        description=f"Manager review: {action}",
-        notes=feedback
+        progress_percentage=goal.progress_percentage or 0,
+        comments=f"Manager review: {action} - {feedback}"
     )
     
     return Response({
@@ -398,9 +397,8 @@ def approve_goal(request, goal_id):
     GoalUpdate.objects.create(
         goal=goal,
         updated_by=request.user,
-        update_type='approval',
-        description='Goal approved by manager',
-        notes=feedback
+        progress_percentage=goal.progress_percentage or 0,
+        comments=f'Goal approved by manager - {feedback}'
     )
     
     return Response({
@@ -519,9 +517,8 @@ def submit_bulk_feedback(request):
         GoalUpdate.objects.create(
             goal=goal,
             updated_by=request.user,
-            update_type='bulk_review',
-            description=f'Bulk review: {action}',
-            notes=individual_fb
+            progress_percentage=goal.progress_percentage or 0,
+            comments=f'Bulk review: {action} - {individual_fb}'
         )
         
         updated_goals.append(goal.id)
@@ -621,9 +618,8 @@ def submit_goal_for_approval(request, goal_id):
         GoalUpdate.objects.create(
             goal=goal,
             updated_by=request.user,
-            update_type='submission',
-            description='Goal submitted for manager approval',
-            notes='Goal submitted for approval'
+            progress_percentage=goal.progress_percentage or 0,
+            comments='Goal submitted for manager approval'
         )
         
         return Response({

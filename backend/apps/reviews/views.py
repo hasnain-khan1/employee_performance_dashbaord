@@ -69,6 +69,30 @@ class SelfReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
         return SelfReview.objects.filter(employee=user)
 
 
+class SelfReviewSectionListView(generics.ListCreateAPIView):
+    """List and create self-review sections."""
+    
+    serializer_class = SelfReviewSectionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        self_review_id = self.kwargs.get('self_review_id')
+        return SelfReviewSection.objects.filter(
+            self_review__employee=user,
+            self_review_id=self_review_id
+        )
+    
+    def perform_create(self, serializer):
+        self_review_id = self.kwargs.get('self_review_id')
+        self_review = get_object_or_404(
+            SelfReview,
+            id=self_review_id,
+            employee=self.request.user
+        )
+        serializer.save(self_review=self_review)
+
+
 class SelfReviewSectionView(generics.RetrieveUpdateAPIView):
     """Update a specific self-review section."""
     
@@ -102,6 +126,109 @@ class EvidenceLinkView(generics.ListCreateAPIView):
             employee=self.request.user
         )
         serializer.save(self_review=self_review)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Get Current Self-Review",
+    description="Get the current active self-review for the logged-in user.",
+    responses={
+        200: SelfReviewSerializer,
+        404: "No current self-review found",
+        401: "Authentication required"
+    }
+)
+def get_current_self_review(request):
+    """Get the current active self-review for the user."""
+    try:
+        # Get the current active review cycle
+        current_cycle = ReviewCycle.objects.filter(is_active=True).first()
+        
+        if not current_cycle:
+            return Response(
+                {'error': 'No active review cycle found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get the current self-review for the user in the active cycle
+        self_review = SelfReview.objects.filter(
+            employee=request.user,
+            cycle=current_cycle
+        ).first()
+        
+        if not self_review:
+            return Response(
+                {'error': 'No current self-review found for this cycle'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = SelfReviewSerializer(self_review, context={'request': request})
+        return Response(serializer.data)
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Error retrieving current self-review: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@extend_schema(
+    summary="Check Self-Review Prerequisites",
+    description="Check if the user meets prerequisites for self-review.",
+    responses={
+        200: "Prerequisites check completed",
+        401: "Authentication required"
+    }
+)
+def check_self_review_prerequisites(request):
+    """Check if the user meets prerequisites for self-review."""
+    try:
+        # Get the current active review cycle
+        current_cycle = ReviewCycle.objects.filter(is_active=True).first()
+        
+        if not current_cycle:
+            return Response({
+                'can_review': False,
+                'reason': 'No active review cycle found',
+                'cycle_active': False
+            })
+        
+        # Check if user has goals for this cycle
+        from apps.goals.models import Goal
+        user_goals = Goal.objects.filter(
+            employee=request.user,
+            cycle=current_cycle
+        ).exclude(status='cancelled')
+        
+        has_goals = user_goals.exists()
+        has_approved_goals = user_goals.filter(status='approved').exists()
+        
+        # Check if user already has a self-review for this cycle
+        existing_review = SelfReview.objects.filter(
+            employee=request.user,
+            cycle=current_cycle
+        ).first()
+        
+        return Response({
+            'can_review': has_goals and has_approved_goals,
+            'has_goals': has_goals,
+            'has_approved_goals': has_approved_goals,
+            'goals_count': user_goals.count(),
+            'approved_goals_count': user_goals.filter(status='approved').count(),
+            'has_existing_review': existing_review is not None,
+            'cycle_active': True,
+            'cycle_name': current_cycle.name,
+            'cycle_period': f"{current_cycle.start_date} to {current_cycle.end_date}"
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Error checking prerequisites: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['POST'])

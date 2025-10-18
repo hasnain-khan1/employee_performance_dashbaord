@@ -12,9 +12,12 @@ app_name = 'reviews'
 urlpatterns = [
     # Self-Review URLs
     path('self/', views.SelfReviewListView.as_view(), name='self_review_list'),
+    path('self/current/', views.get_current_self_review, name='current_self_review'),
+    path('self/prerequisites/', views.check_self_review_prerequisites, name='self_review_prerequisites'),
     path('self/<int:pk>/', views.SelfReviewDetailView.as_view(), name='self_review_detail'),
     path('self/<int:pk>/submit/', views.submit_self_review, name='submit_self_review'),
     path('self/<int:pk>/auto-save/', views.auto_save_self_review, name='auto_save_self_review'),
+    path('self/<int:self_review_id>/sections/', views.SelfReviewSectionListView.as_view(), name='self_review_sections'),
     path('self/<int:self_review_id>/sections/<int:pk>/', views.SelfReviewSectionView.as_view(), name='self_review_section'),
     path('self/<int:self_review_id>/evidence/', views.EvidenceLinkView.as_view(), name='evidence_links'),
     

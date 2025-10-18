@@ -156,9 +156,14 @@
                 <v-text-field
                   v-model="goalForm.title"
                   label="Goal Title"
-                  :rules="[v => !!v || 'Title is required']"
+                  :rules="[
+                    v => !!v || 'Title is required',
+                    v => (v && v.length >= 5) || 'Title must be at least 5 characters'
+                  ]"
                   :readonly="viewingGoal"
                   required
+                  counter
+                  :maxlength="100"
                 />
               </v-col>
             </v-row>
@@ -168,9 +173,14 @@
                 <v-textarea
                   v-model="goalForm.description"
                   label="Description"
-                  :rules="[v => !!v || 'Description is required']"
+                  :rules="[
+                    v => !!v || 'Description is required',
+                    v => (v && v.length >= 20) || 'Description must be at least 20 characters'
+                  ]"
                   :readonly="viewingGoal"
                   required
+                  counter
+                  :maxlength="500"
                 />
               </v-col>
             </v-row>
@@ -201,7 +211,10 @@
                 <v-text-field
                   v-model="goalForm.metric"
                   label="Metric"
-                  :rules="[v => !!v || 'Metric is required']"
+                  :rules="[
+                    v => !!v || 'Metric is required',
+                    v => (v && v.trim().length > 0) || 'Metric must contain measurable criteria'
+                  ]"
                   :readonly="viewingGoal"
                   hint="How will success be measured? Examples: 'Increase revenue by 25%', 'Complete 10 projects', 'Reduce time to 2 hours'"
                   persistent-hint
@@ -236,7 +249,10 @@
                   v-model="goalForm.target_date"
                   label="Target Date"
                   type="date"
-                  :rules="[v => !!v || 'Target date is required']"
+                  :rules="[
+                    v => !!v || 'Target date is required',
+                    v => !v || new Date(v) > new Date() || 'Target date must be in the future'
+                  ]"
                   :readonly="viewingGoal"
                   required
                 />
@@ -291,6 +307,10 @@
                 <v-textarea
                   v-model="goalForm.specific"
                   label="Specific - What exactly will be accomplished?"
+                  :rules="[
+                    v => !!v || 'Specific criteria is required',
+                    v => (v && v.trim().length > 0) || 'Specific criteria must be provided'
+                  ]"
                   :readonly="viewingGoal"
                   hint="Be clear and specific. Example: 'Launch new customer portal with 5 key features' instead of 'Improve website'"
                   persistent-hint
@@ -304,6 +324,10 @@
                 <v-textarea
                   v-model="goalForm.measurable"
                   label="Measurable - How will success be measured?"
+                  :rules="[
+                    v => !!v || 'Measurable criteria is required',
+                    v => (v && v.trim().length > 0) || 'Measurable criteria must be provided'
+                  ]"
                   :readonly="viewingGoal"
                   hint="Include numbers and metrics. Example: 'Increase customer satisfaction score from 7.5 to 8.5' or 'Process 100 applications per week'"
                   persistent-hint
@@ -317,6 +341,10 @@
                 <v-textarea
                   v-model="goalForm.achievable"
                   label="Achievable - Is this goal realistic and attainable?"
+                  :rules="[
+                    v => !!v || 'Achievable criteria is required',
+                    v => (v && v.trim().length > 0) || 'Achievable criteria must be provided'
+                  ]"
                   :readonly="viewingGoal"
                   hint="Explain why this goal is realistic. Example: 'Team has necessary skills and resources, similar projects completed in past 6 months'"
                   persistent-hint
@@ -330,6 +358,10 @@
                 <v-textarea
                   v-model="goalForm.relevant"
                   label="Relevant - How does this align with broader objectives?"
+                  :rules="[
+                    v => !!v || 'Relevant criteria is required',
+                    v => (v && v.trim().length > 0) || 'Relevant criteria must be provided'
+                  ]"
                   :readonly="viewingGoal"
                   hint="Connect to company/department goals. Example: 'Supports Q2 initiative to improve customer retention by 15%'"
                   persistent-hint
@@ -343,6 +375,10 @@
                 <v-textarea
                   v-model="goalForm.time_bound"
                   label="Time-bound - What is the deadline and timeline?"
+                  :rules="[
+                    v => !!v || 'Time-bound criteria is required',
+                    v => (v && v.trim().length > 0) || 'Time-bound criteria must be provided'
+                  ]"
                   :readonly="viewingGoal"
                   hint="Specify milestones and deadlines. Example: 'Phase 1 by March 31, Phase 2 by May 15, Launch by June 30'"
                   persistent-hint
@@ -771,7 +807,7 @@ const deleteGoal = async (goal) => {
 const submitGoalForApproval = async (goal) => {
   if (confirm(`Submit "${goal.title}" for approval?`)) {
     try {
-      await goalsAPI.updateGoal(goal.id, { status: 'submitted' })
+      await goalsAPI.submitGoalForApproval(goal.id)
       toast.success('Goal submitted for approval')
       await loadGoals()
     } catch (error) {
@@ -793,6 +829,11 @@ const submitGoalForApproval = async (goal) => {
           errorMsg = data.message
         } else if (data.detail) {
           errorMsg = data.detail
+        } else if (data.error) {
+          errorMsg = data.error
+        } else if (data.details) {
+          // Handle validation details array
+          errorMsg = Array.isArray(data.details) ? data.details.join('; ') : data.details
         } else {
           // Combine all field errors
           const errors = Object.entries(data).map(([field, msgs]) => {
